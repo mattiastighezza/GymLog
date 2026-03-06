@@ -27,7 +27,7 @@ enum class DialogState { HIDDEN, SELECT_EXERCISE, NEW_EXERCISE, CONFIG_EXERCISE 
 @Composable
 fun CreateWorkoutScreen(
     initialTemplate: WorkoutTemplate?,
-    availableExercises: List<Exercise>, // L'elenco degli esercizi salvati
+    availableExercises: List<Exercise>,
     onAddExerciseToDb: (String) -> Unit,
     onDeleteExerciseFromDb: (Exercise) -> Unit,
     onBackClick: () -> Unit,
@@ -40,7 +40,11 @@ fun CreateWorkoutScreen(
     var dialogState by remember { mutableStateOf(DialogState.HIDDEN) }
     var editingIndex by remember { mutableStateOf<Int?>(null) }
     var selectedExerciseName by remember { mutableStateOf("") }
+
     var exerciseToDeleteFromDb by remember { mutableStateOf<Exercise?>(null) }
+
+    // NUOVO: Stato per capire quale esercizio vogliamo rimuovere dalla scheda attuale
+    var indexToRemoveFromTemplate by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
         topBar = {
@@ -75,8 +79,24 @@ fun CreateWorkoutScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(exercise.exerciseName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                            // NUOVO: Riga con Nome Esercizio e Tasto Cestino
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(exercise.exerciseName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+
+                                IconButton(
+                                    onClick = { indexToRemoveFromTemplate = index },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, "Rimuovi dalla scheda", tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+
                             Spacer(Modifier.height(8.dp))
+
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text("${exercise.sets} Serie x ${exercise.reps} Reps", style = MaterialTheme.typography.bodyLarge)
                                 val min = exercise.restSeconds / 60
@@ -104,6 +124,30 @@ fun CreateWorkoutScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                 }
             }
+        }
+
+        // =====================================================================
+        // NUOVO POPUP: CONFERMA RIMOZIONE ESERCIZIO DALLA SCHEDA
+        // =====================================================================
+        if (indexToRemoveFromTemplate != null) {
+            val exName = exercises[indexToRemoveFromTemplate!!].exerciseName
+            AlertDialog(
+                onDismissRequest = { indexToRemoveFromTemplate = null },
+                title = { Text("Rimuovi Esercizio") },
+                text = { Text("Vuoi rimuovere '$exName' da questa scheda?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val newList = exercises.toMutableList()
+                            newList.removeAt(indexToRemoveFromTemplate!!)
+                            exercises = newList
+                            indexToRemoveFromTemplate = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Rimuovi") }
+                },
+                dismissButton = { TextButton(onClick = { indexToRemoveFromTemplate = null }) { Text("Annulla") } }
+            )
         }
 
         // =====================================================================
