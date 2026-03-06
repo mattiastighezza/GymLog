@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
 
                     val templates by viewModel.templates.collectAsState()
                     val workoutLogs by viewModel.workoutLogs.collectAsState()
+                    val availableExercises by viewModel.exercises.collectAsState() // Raccogliamo la lista esercizi
 
                     NavHost(navController = navController, startDestination = "home") {
 
@@ -44,7 +45,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ROTTA MODIFICATA: Accetta un ID opzionale per editare
                         composable(
                             route = "create_workout?templateId={templateId}",
                             arguments = listOf(navArgument("templateId") { nullable = true })
@@ -54,13 +54,13 @@ class MainActivity : ComponentActivity() {
 
                             CreateWorkoutScreen(
                                 initialTemplate = templateToEdit,
+                                availableExercises = availableExercises, // Passiamo la libreria
+                                onAddExerciseToDb = { nomeEs -> viewModel.addExerciseToLibrary(nomeEs) }, // Salva nuovo esercizio
+                                onDeleteExerciseFromDb = { es -> viewModel.deleteExerciseFromLibrary(es) }, // Elimina esercizio
                                 onBackClick = { navController.popBackStack() },
                                 onSaveClick = { workout ->
-                                    if (templateToEdit != null) {
-                                        viewModel.updateTemplate(workout) // Se modificato
-                                    } else {
-                                        viewModel.saveTemplate(workout) // Se nuovo
-                                    }
+                                    if (templateToEdit != null) viewModel.updateTemplate(workout)
+                                    else viewModel.saveTemplate(workout)
                                     navController.popBackStack()
                                 }
                             )

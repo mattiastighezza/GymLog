@@ -3,80 +3,44 @@ package com.example.gymlog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 
-@Composable
-fun ExerciseConfigDialog(
-    initialConfig: ExerciseConfig?,
-    onDismiss: () -> Unit,
-    onConfirm: (ExerciseConfig) -> Unit
-) {
-    var name by remember { mutableStateOf(initialConfig?.exerciseName ?: "") }
-    var sets by remember { mutableStateOf(if (initialConfig?.sets != 0) initialConfig?.sets?.toString() ?: "" else "") }
-    var reps by remember { mutableStateOf(if (initialConfig?.reps != 0) initialConfig?.reps?.toString() ?: "" else "") }
-
-    val initialMin = (initialConfig?.restSeconds ?: 0) / 60
-    val initialSec = (initialConfig?.restSeconds ?: 0) % 60
-    var restMin by remember { mutableStateOf(if(initialConfig != null && initialMin > 0) initialMin.toString() else "") }
-    var restSec by remember { mutableStateOf(if(initialConfig != null && initialSec > 0) initialSec.toString() else "") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initialConfig == null || initialConfig.exerciseName.isBlank()) "Nuovo Esercizio" else "Modifica Esercizio") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it },
-                    label = { Text("Nome (es. Panca Piana)") }, singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = sets, onValueChange = { sets = it }, label = { Text("Serie") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Ripetizioni") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("Riposo tra le serie", style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.height(4.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = restMin, onValueChange = { restMin = it }, label = { Text("Minuti") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    OutlinedTextField(value = restSec, onValueChange = { restSec = it }, label = { Text("Secondi") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                val totalRestSeconds = (restMin.toIntOrNull() ?: 0) * 60 + (restSec.toIntOrNull() ?: 0)
-                onConfirm(ExerciseConfig(name.ifBlank { "Esercizio senza nome" }, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, totalRestSeconds))
-            }) { Text("Conferma") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } }
-    )
-}
+// GLI STATI DEL NOSTRO POPUP
+enum class DialogState { HIDDEN, SELECT_EXERCISE, NEW_EXERCISE, CONFIG_EXERCISE }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateWorkoutScreen(
-    initialTemplate: WorkoutTemplate?, // NUOVO: La scheda da modificare (se esiste)
+    initialTemplate: WorkoutTemplate?,
+    availableExercises: List<Exercise>, // L'elenco degli esercizi salvati
+    onAddExerciseToDb: (String) -> Unit,
+    onDeleteExerciseFromDb: (Exercise) -> Unit,
     onBackClick: () -> Unit,
     onSaveClick: (WorkoutTemplate) -> Unit
 ) {
-    // Se c'è una scheda iniziale, pre-compiliamo i campi!
     var workoutName by remember { mutableStateOf(initialTemplate?.name ?: "") }
     var exercises by remember { mutableStateOf(initialTemplate?.exercises ?: listOf()) }
 
-    var showDialog by remember { mutableStateOf(false) }
+    // Gestione dei Popup
+    var dialogState by remember { mutableStateOf(DialogState.HIDDEN) }
     var editingIndex by remember { mutableStateOf<Int?>(null) }
+    var selectedExerciseName by remember { mutableStateOf("") }
+    var exerciseToDeleteFromDb by remember { mutableStateOf<Exercise?>(null) }
 
     Scaffold(
         topBar = {
@@ -85,7 +49,6 @@ fun CreateWorkoutScreen(
                 navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, "Indietro") } },
                 actions = {
                     TextButton(onClick = {
-                        // Manteniamo lo stesso ID se stiamo modificando, altrimenti ne genera uno nuovo automatico
                         val workoutId = initialTemplate?.id ?: java.util.UUID.randomUUID().toString()
                         onSaveClick(WorkoutTemplate(id = workoutId, name = workoutName.ifBlank { "Nuova Scheda" }, exercises = exercises))
                     }) { Text("Salva", style = MaterialTheme.typography.titleMedium) }
@@ -104,7 +67,11 @@ fun CreateWorkoutScreen(
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 itemsIndexed(exercises) { index, exercise ->
                     Card(
-                        modifier = Modifier.fillMaxWidth().clickable { editingIndex = index; showDialog = true },
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            editingIndex = index
+                            selectedExerciseName = exercise.exerciseName
+                            dialogState = DialogState.CONFIG_EXERCISE
+                        },
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -124,7 +91,10 @@ fun CreateWorkoutScreen(
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
-                        onClick = { editingIndex = null; showDialog = true },
+                        onClick = {
+                            editingIndex = null
+                            dialogState = DialogState.SELECT_EXERCISE
+                        },
                         modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
                         Icon(Icons.Default.Add, "Aggiungi")
@@ -136,18 +106,169 @@ fun CreateWorkoutScreen(
             }
         }
 
-        if (showDialog) {
-            val configToEdit = if (editingIndex != null) exercises[editingIndex!!] else null
-            ExerciseConfigDialog(
-                initialConfig = configToEdit,
-                onDismiss = { showDialog = false },
-                onConfirm = { updatedConfig ->
-                    val newList = exercises.toMutableList()
-                    if (editingIndex != null) newList[editingIndex!!] = updatedConfig
-                    else newList.add(updatedConfig)
-                    exercises = newList
-                    showDialog = false
+        // =====================================================================
+        // POPUP 1: SELEZIONA ESERCIZIO DALLA LISTA
+        // =====================================================================
+        if (dialogState == DialogState.SELECT_EXERCISE) {
+            var searchQuery by remember { mutableStateOf("") }
+            val filteredExercises = availableExercises.filter { it.name.contains(searchQuery, ignoreCase = true) }
+
+            AlertDialog(
+                onDismissRequest = { dialogState = DialogState.HIDDEN },
+                title = { Text("Scegli un esercizio") },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = searchQuery, onValueChange = { searchQuery = it },
+                            placeholder = { Text("Cerca...") },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                            items(filteredExercises) { ex ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        selectedExerciseName = ex.name
+                                        dialogState = DialogState.CONFIG_EXERCISE
+                                    }.padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(ex.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                                    IconButton(
+                                        onClick = { exerciseToDeleteFromDb = ex },
+                                        modifier = Modifier.size(24.dp)
+                                    ) { Icon(Icons.Default.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) }
+                                }
+                                HorizontalDivider()
+                            }
+                            if (filteredExercises.isEmpty()) {
+                                item {
+                                    Text("Nessun esercizio trovato.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { dialogState = DialogState.NEW_EXERCISE }) { Text("Nuovo Esercizio") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { dialogState = DialogState.HIDDEN }) { Text("Annulla") }
                 }
+            )
+        }
+
+        // =====================================================================
+        // POPUP 1.B: CONFERMA ELIMINAZIONE ESERCIZIO DAL DATABASE
+        // =====================================================================
+        if (exerciseToDeleteFromDb != null) {
+            AlertDialog(
+                onDismissRequest = { exerciseToDeleteFromDb = null },
+                title = { Text("Elimina Esercizio") },
+                text = { Text("Sei sicuro di voler eliminare '${exerciseToDeleteFromDb?.name}' dalla tua lista? (Non verrà eliminato dalle schede già create)") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onDeleteExerciseFromDb(exerciseToDeleteFromDb!!)
+                            exerciseToDeleteFromDb = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Elimina") }
+                },
+                dismissButton = { TextButton(onClick = { exerciseToDeleteFromDb = null }) { Text("Annulla") } }
+            )
+        }
+
+        // =====================================================================
+        // POPUP 2: CREA NUOVO ESERCIZIO
+        // =====================================================================
+        if (dialogState == DialogState.NEW_EXERCISE) {
+            var newExerciseName by remember { mutableStateOf("") }
+
+            AlertDialog(
+                onDismissRequest = { dialogState = DialogState.SELECT_EXERCISE },
+                title = { Text("Nuovo Esercizio") },
+                text = {
+                    OutlinedTextField(
+                        value = newExerciseName, onValueChange = { newExerciseName = it },
+                        label = { Text("Nome Esercizio") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (newExerciseName.isNotBlank()) {
+                            onAddExerciseToDb(newExerciseName)
+                            selectedExerciseName = newExerciseName
+                            dialogState = DialogState.CONFIG_EXERCISE
+                        }
+                    }) { Text("Aggiungi") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { dialogState = DialogState.SELECT_EXERCISE }) { Text("Indietro") }
+                }
+            )
+        }
+
+        // =====================================================================
+        // POPUP 3: CONFIGURA ESERCIZIO (Serie, Reps, Recupero)
+        // =====================================================================
+        if (dialogState == DialogState.CONFIG_EXERCISE) {
+            val initialConfig = if (editingIndex != null) exercises[editingIndex!!] else null
+
+            var sets by remember { mutableStateOf(if (initialConfig?.sets != 0 && initialConfig != null) initialConfig.sets.toString() else "") }
+            var reps by remember { mutableStateOf(if (initialConfig?.reps != 0 && initialConfig != null) initialConfig.reps.toString() else "") }
+
+            val initialMin = (initialConfig?.restSeconds ?: 0) / 60
+            val initialSec = (initialConfig?.restSeconds ?: 0) % 60
+            var restMin by remember { mutableStateOf(if(initialConfig != null && initialMin > 0) initialMin.toString() else "") }
+            var restSec by remember { mutableStateOf(if(initialConfig != null && initialSec > 0) initialSec.toString() else "") }
+
+            AlertDialog(
+                onDismissRequest = { dialogState = DialogState.HIDDEN },
+                title = {
+                    Column {
+                        Text("Configura Esercizio", style = MaterialTheme.typography.labelMedium)
+                        Text(selectedExerciseName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Cambia esercizio",
+                            style = MaterialTheme.typography.labelLarge,
+                            textDecoration = TextDecoration.Underline,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.clickable { dialogState = DialogState.SELECT_EXERCISE }
+                        )
+                    }
+                },
+                text = {
+                    Column {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(value = sets, onValueChange = { sets = it }, label = { Text("Serie") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Ripetizioni") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text("Riposo tra le serie", style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(value = restMin, onValueChange = { restMin = it }, label = { Text("Minuti") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            OutlinedTextField(value = restSec, onValueChange = { restSec = it }, label = { Text("Secondi") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val totalRestSeconds = (restMin.toIntOrNull() ?: 0) * 60 + (restSec.toIntOrNull() ?: 0)
+                        val newConfig = ExerciseConfig(selectedExerciseName, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, totalRestSeconds)
+
+                        val newList = exercises.toMutableList()
+                        if (editingIndex != null) newList[editingIndex!!] = newConfig else newList.add(newConfig)
+                        exercises = newList
+
+                        dialogState = DialogState.HIDDEN
+                    }) { Text("Ok") }
+                },
+                dismissButton = { TextButton(onClick = { dialogState = DialogState.HIDDEN }) { Text("Annulla") } }
             )
         }
     }
