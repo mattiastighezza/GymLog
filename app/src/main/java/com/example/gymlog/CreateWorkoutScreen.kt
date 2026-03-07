@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,13 +50,26 @@ fun WheelTimePicker(
     }
 
     Box(modifier = Modifier.fillMaxWidth().height(130.dp), contentAlignment = Alignment.Center) {
-        Box(modifier = Modifier.fillMaxWidth().height(44.dp).background(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), shape = RoundedCornerShape(8.dp)))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+        )
 
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 43.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            // Ruota libera attiva, ma aggancio (snap) con la velocità di default!
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                pagerSnapDistance = PagerSnapDistance.atMost(100)
+            )
         ) { page ->
             val isSelected = page == pagerState.currentPage
             val optionSeconds = options[page]
@@ -183,7 +198,6 @@ fun CreateWorkoutScreen(
                                 }
                             }
 
-                            // SE ESISTE LA NOTA, LA MOSTRIAMO SOTTO IL NOME
                             if (exercise.note.isNotBlank()) {
                                 Text(
                                     text = "📝 ${exercise.note}",
@@ -290,6 +304,9 @@ fun CreateWorkoutScreen(
                                 }
                                 HorizontalDivider()
                             }
+                            if (filteredExercises.isEmpty()) {
+                                item { Text("Nessun esercizio trovato.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
                         }
                     }
                 },
@@ -344,7 +361,7 @@ fun CreateWorkoutScreen(
         if (dialogState == DialogState.CONFIG_EXERCISE) {
             val initialConfig = if (editingIndex != null) exercises[editingIndex!!] else null
 
-            var note by remember { mutableStateOf(initialConfig?.note ?: "") } // CAMPO NOTA
+            var note by remember { mutableStateOf(initialConfig?.note ?: "") }
             var sets by remember { mutableStateOf(if (initialConfig?.sets != 0 && initialConfig != null) initialConfig.sets.toString() else "") }
             var reps by remember { mutableStateOf(if (initialConfig?.reps != 0 && initialConfig != null) initialConfig.reps.toString() else "") }
 
@@ -370,7 +387,6 @@ fun CreateWorkoutScreen(
                 },
                 text = {
                     Column {
-                        // IL CAMPO NOTE NEL POPUP!
                         OutlinedTextField(
                             value = note,
                             onValueChange = { note = it },
@@ -399,7 +415,6 @@ fun CreateWorkoutScreen(
                 },
                 confirmButton = {
                     Button(onClick = {
-                        // SALVIAMO ANCHE LA NOTA NELLA CONFIGURAZIONE!
                         val newConfig = ExerciseConfig(selectedExerciseName, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, finalRestSeconds, note)
 
                         val newList = exercises.toMutableList()
