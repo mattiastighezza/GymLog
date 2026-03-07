@@ -1,10 +1,15 @@
 package com.example.gymlog
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -23,8 +28,79 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 
 enum class DialogState { HIDDEN, SELECT_EXERCISE, NEW_EXERCISE, CONFIG_EXERCISE }
+
+// NUOVO COMPONENTE: Il Selettore Rotante per il Timer!
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun WheelTimePicker(
+    options: List<Int>,
+    initialValue: Int,
+    onValueChange: (Int) -> Unit
+) {
+    // Cerchiamo l'indice iniziale. Se il valore non esiste, parte dal primo (0s)
+    val initialIndex = options.indexOf(initialValue).takeIf { it >= 0 } ?: 0
+    val pagerState = rememberPagerState(initialPage = initialIndex) { options.size }
+
+    // Ogni volta che il pager si ferma su una pagina, comunichiamo il nuovo valore
+    LaunchedEffect(pagerState.currentPage) {
+        onValueChange(options[pagerState.currentPage])
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(130.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Sfondo colorato per evidenziare la selezione centrale
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+        )
+
+        // Il vero e proprio rullo scorrevole
+        VerticalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 43.dp), // Spazio per mostrare l'elemento sopra e sotto
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) { page ->
+            val isSelected = page == pagerState.currentPage
+            val optionSeconds = options[page]
+
+            // Formattazione furba del testo (es. "1m 15s")
+            val text = if (optionSeconds == 0) "Nessun riposo" else {
+                val m = optionSeconds / 60
+                val s = optionSeconds % 60
+                if (m == 0) "${s}s" else if (s == 0) "${m}m" else "${m}m ${s}s"
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = text,
+                    style = if (isSelected) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    // Sfuma il colore degli elementi non selezionati
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                )
+            }
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +121,14 @@ fun CreateWorkoutScreen(
 
     var exerciseToDeleteFromDb by remember { mutableStateOf<Exercise?>(null) }
     var indexToRemoveFromTemplate by remember { mutableStateOf<Int?>(null) }
+
+    // Generiamo la lista dinamica per il timer (Scatti di 5s fino a 60, poi scatti di 15s fino a 10 min)
+    val restTimerOptions = remember {
+        val opts = mutableListOf<Int>()
+        for (i in 0..60 step 5) opts.add(i)
+        for (i in 75..600 step 15) opts.add(i)
+        opts
+    }
 
     Scaffold(
         topBar = {
@@ -79,22 +163,18 @@ fun CreateWorkoutScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-
-                            // 1. RIGA INTESTAZIONE: Numero, Nome e Pulsanti d'Azione
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // NUMERO PROGRESSIVO E NOME
                                 Text(
                                     text = "${index + 1}. ${exercise.exerciseName}",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleLarge,
-                                    modifier = Modifier.weight(1f) // Evita che il testo spinga fuori i bottoni
+                                    modifier = Modifier.weight(1f)
                                 )
 
-                                // BOTTONI SPOSTA SU / GIU / ELIMINA
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (index > 0) {
                                         IconButton(
@@ -131,24 +211,17 @@ fun CreateWorkoutScreen(
 
                             Spacer(Modifier.height(12.dp))
 
-                            // 2. RIGA INFORMAZIONI: Serie, Reps, Timer con ICONE
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-
-                                // ICONA E TESTO SERIE
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.List, contentDescription = "Serie", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(Modifier.width(4.dp))
                                     Text("${exercise.sets} Serie", style = MaterialTheme.typography.bodyLarge)
                                 }
-
-                                // ICONA E TESTO REPETIZIONI
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.Refresh, contentDescription = "Ripetizioni", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(Modifier.width(4.dp))
                                     Text("${exercise.reps} Reps", style = MaterialTheme.typography.bodyLarge)
                                 }
-
-                                // TIMER
                                 val min = exercise.restSeconds / 60
                                 val sec = exercise.restSeconds % 60
                                 Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
@@ -177,7 +250,6 @@ fun CreateWorkoutScreen(
             }
         }
 
-        // POPUP CONFERMA RIMOZIONE ESERCIZIO DALLA SCHEDA
         if (indexToRemoveFromTemplate != null) {
             val exName = exercises[indexToRemoveFromTemplate!!].exerciseName
             AlertDialog(
@@ -199,7 +271,6 @@ fun CreateWorkoutScreen(
             )
         }
 
-        // POPUP SELEZIONA ESERCIZIO DALLA LISTA
         if (dialogState == DialogState.SELECT_EXERCISE) {
             var searchQuery by remember { mutableStateOf("") }
             val filteredExercises = availableExercises.filter { it.name.contains(searchQuery, ignoreCase = true) }
@@ -245,7 +316,6 @@ fun CreateWorkoutScreen(
             )
         }
 
-        // POPUP CONFERMA ELIMINAZIONE ESERCIZIO DAL DATABASE
         if (exerciseToDeleteFromDb != null) {
             AlertDialog(
                 onDismissRequest = { exerciseToDeleteFromDb = null },
@@ -264,7 +334,6 @@ fun CreateWorkoutScreen(
             )
         }
 
-        // POPUP CREA NUOVO ESERCIZIO
         if (dialogState == DialogState.NEW_EXERCISE) {
             var newExerciseName by remember { mutableStateOf("") }
 
@@ -290,17 +359,16 @@ fun CreateWorkoutScreen(
             )
         }
 
-        // POPUP CONFIGURA ESERCIZIO
         if (dialogState == DialogState.CONFIG_EXERCISE) {
             val initialConfig = if (editingIndex != null) exercises[editingIndex!!] else null
 
             var sets by remember { mutableStateOf(if (initialConfig?.sets != 0 && initialConfig != null) initialConfig.sets.toString() else "") }
             var reps by remember { mutableStateOf(if (initialConfig?.reps != 0 && initialConfig != null) initialConfig.reps.toString() else "") }
 
-            val initialMin = (initialConfig?.restSeconds ?: 0) / 60
-            val initialSec = (initialConfig?.restSeconds ?: 0) % 60
-            var restMin by remember { mutableStateOf(if(initialConfig != null && initialMin > 0) initialMin.toString() else "") }
-            var restSec by remember { mutableStateOf(if(initialConfig != null && initialSec > 0) initialSec.toString() else "") }
+            // Per il timer: cerchiamo il valore più vicino nella lista (nel caso si modifichi una vecchia scheda con valori non standard)
+            val initialRestTarget = initialConfig?.restSeconds ?: 90 // Default 1m 30s
+            val closestValidRest = restTimerOptions.minByOrNull { abs(it - initialRestTarget) } ?: 90
+            var finalRestSeconds by remember { mutableStateOf(closestValidRest) }
 
             AlertDialog(
                 onDismissRequest = { dialogState = DialogState.HIDDEN },
@@ -324,19 +392,22 @@ fun CreateWorkoutScreen(
                             OutlinedTextField(value = sets, onValueChange = { sets = it }, label = { Text("Serie") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                             OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Ripetizioni") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                         }
-                        Spacer(Modifier.height(16.dp))
-                        Text("Riposo tra le serie", style = MaterialTheme.typography.labelMedium)
-                        Spacer(Modifier.height(4.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(value = restMin, onValueChange = { restMin = it }, label = { Text("Minuti") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                            OutlinedTextField(value = restSec, onValueChange = { restSec = it }, label = { Text("Secondi") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                        }
+
+                        Spacer(Modifier.height(24.dp))
+                        Text("Tempo di recupero:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+
+                        // IL NOSTRO NUOVO SELETTORE A RULLO!
+                        WheelTimePicker(
+                            options = restTimerOptions,
+                            initialValue = finalRestSeconds,
+                            onValueChange = { newValue -> finalRestSeconds = newValue }
+                        )
                     }
                 },
                 confirmButton = {
                     Button(onClick = {
-                        val totalRestSeconds = (restMin.toIntOrNull() ?: 0) * 60 + (restSec.toIntOrNull() ?: 0)
-                        val newConfig = ExerciseConfig(selectedExerciseName, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, totalRestSeconds)
+                        val newConfig = ExerciseConfig(selectedExerciseName, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, finalRestSeconds)
 
                         val newList = exercises.toMutableList()
                         if (editingIndex != null) newList[editingIndex!!] = newConfig else newList.add(newConfig)
