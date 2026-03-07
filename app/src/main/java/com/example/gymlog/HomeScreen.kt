@@ -32,16 +32,13 @@ fun HomeScreen(
     onDeleteTemplate: (WorkoutTemplate) -> Unit
 ) {
     var templateToDelete by remember { mutableStateOf<WorkoutTemplate?>(null) }
+    // NUOVA VARIABILE: Per tenere in memoria la scheda che stiamo per avviare sovrascrivendo la vecchia
+    var templateToStartConfirmation by remember { mutableStateOf<WorkoutTemplate?>(null) }
 
-    // ==========================================
-    // SISTEMA ANTI-SFARFALLIO (FREEZE DELLA UI)
-    // ==========================================
     val lifecycleOwner = LocalLifecycleOwner.current
     var isNavigating by remember { mutableStateOf(false) }
     var frozenTemplate by remember { mutableStateOf<WorkoutTemplate?>(null) }
 
-    // Questo pezzo rileva quando torni sulla Home (es. se metti in pausa o abbandoni)
-    // e sblocca nuovamente la UI per aggiornare il banner.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -52,9 +49,7 @@ fun HomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Se stiamo cambiando pagina, usa la "fotografia" vecchia. Altrimenti usa i dati in tempo reale.
     val displayTemplate = if (isNavigating) frozenTemplate else activeWorkoutTemplate
-    // ==========================================
 
     Column(
         modifier = Modifier
@@ -66,7 +61,6 @@ fun HomeScreen(
         Text("GymLog", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Usiamo 'displayTemplate' al posto di 'activeWorkoutTemplate'
         if (displayTemplate != null) {
             Card(
                 onClick = {
@@ -121,10 +115,16 @@ fun HomeScreen(
 
                             Row {
                                 IconButton(onClick = {
-                                    // LA MAGIA: Prima di avviare, scattiamo la foto e ghiacciamo la UI!
-                                    frozenTemplate = activeWorkoutTemplate
-                                    isNavigating = true
-                                    onStartWorkoutClick(template)
+                                    // LA MAGIA: Controlliamo se c'è un allenamento in corso!
+                                    if (activeWorkoutTemplate != null) {
+                                        // Blocchiamo tutto e mostriamo il popup
+                                        templateToStartConfirmation = template
+                                    } else {
+                                        // Via libera, facciamo partire subito la scheda
+                                        frozenTemplate = activeWorkoutTemplate
+                                        isNavigating = true
+                                        onStartWorkoutClick(template)
+                                    }
                                 }) { Icon(Icons.Default.PlayArrow, "Avvia", tint = MaterialTheme.colorScheme.primary) }
 
                                 IconButton(onClick = { onEditTemplate(template) }) { Icon(Icons.Default.Edit, "Modifica", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -137,6 +137,7 @@ fun HomeScreen(
         }
     }
 
+    // POPUP ELIMINAZIONE SCHEDA
     if (templateToDelete != null) {
         AlertDialog(
             onDismissRequest = { templateToDelete = null },
@@ -146,6 +147,31 @@ fun HomeScreen(
                 Button(onClick = { onDeleteTemplate(templateToDelete!!); templateToDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Elimina") }
             },
             dismissButton = { TextButton(onClick = { templateToDelete = null }) { Text("Annulla") } }
+        )
+    }
+
+    // NUOVO POPUP: SOVRASCRITTURA ALLENAMENTO IN CORSO
+    if (templateToStartConfirmation != null) {
+        AlertDialog(
+            onDismissRequest = { templateToStartConfirmation = null },
+            title = { Text("Sovrascrivere allenamento?") },
+            text = { Text("Hai già un allenamento in corso in pausa. Se avvii una nuova scheda, i dati non salvati dell'allenamento attuale andranno persi per sempre. Vuoi procedere?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // Abbiamo confermato! Avviamo l'allenamento.
+                        val templateToStart = templateToStartConfirmation!!
+                        templateToStartConfirmation = null // Chiudiamo il popup
+
+                        // Congeliamo la UI ed eseguiamo la navigazione
+                        frozenTemplate = activeWorkoutTemplate
+                        isNavigating = true
+                        onStartWorkoutClick(templateToStart)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Procedi") }
+            },
+            dismissButton = { TextButton(onClick = { templateToStartConfirmation = null }) { Text("Annulla") } }
         )
     }
 }
