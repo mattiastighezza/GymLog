@@ -10,6 +10,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,7 +24,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 
-// GLI STATI DEL NOSTRO POPUP
 enum class DialogState { HIDDEN, SELECT_EXERCISE, NEW_EXERCISE, CONFIG_EXERCISE }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,14 +39,11 @@ fun CreateWorkoutScreen(
     var workoutName by remember { mutableStateOf(initialTemplate?.name ?: "") }
     var exercises by remember { mutableStateOf(initialTemplate?.exercises ?: listOf()) }
 
-    // Gestione dei Popup
     var dialogState by remember { mutableStateOf(DialogState.HIDDEN) }
     var editingIndex by remember { mutableStateOf<Int?>(null) }
     var selectedExerciseName by remember { mutableStateOf("") }
 
     var exerciseToDeleteFromDb by remember { mutableStateOf<Exercise?>(null) }
-
-    // NUOVO: Stato per capire quale esercizio vogliamo rimuovere dalla scheda attuale
     var indexToRemoveFromTemplate by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
@@ -79,26 +79,76 @@ fun CreateWorkoutScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            // NUOVO: Riga con Nome Esercizio e Tasto Cestino
+
+                            // 1. RIGA INTESTAZIONE: Numero, Nome e Pulsanti d'Azione
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(exercise.exerciseName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                                // NUMERO PROGRESSIVO E NOME
+                                Text(
+                                    text = "${index + 1}. ${exercise.exerciseName}",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.weight(1f) // Evita che il testo spinga fuori i bottoni
+                                )
 
-                                IconButton(
-                                    onClick = { indexToRemoveFromTemplate = index },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, "Rimuovi dalla scheda", tint = MaterialTheme.colorScheme.error)
+                                // BOTTONI SPOSTA SU / GIU / ELIMINA
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (index > 0) {
+                                        IconButton(
+                                            onClick = {
+                                                val newList = exercises.toMutableList()
+                                                val temp = newList[index]
+                                                newList[index] = newList[index - 1]
+                                                newList[index - 1] = temp
+                                                exercises = newList
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) { Icon(Icons.Default.KeyboardArrowUp, "Sposta Su", tint = MaterialTheme.colorScheme.primary) }
+                                    }
+
+                                    if (index < exercises.size - 1) {
+                                        IconButton(
+                                            onClick = {
+                                                val newList = exercises.toMutableList()
+                                                val temp = newList[index]
+                                                newList[index] = newList[index + 1]
+                                                newList[index + 1] = temp
+                                                exercises = newList
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) { Icon(Icons.Default.KeyboardArrowDown, "Sposta Giù", tint = MaterialTheme.colorScheme.primary) }
+                                    }
+
+                                    IconButton(
+                                        onClick = { indexToRemoveFromTemplate = index },
+                                        modifier = Modifier.size(32.dp).padding(start = 4.dp)
+                                    ) { Icon(Icons.Default.Delete, "Rimuovi dalla scheda", tint = MaterialTheme.colorScheme.error) }
                                 }
                             }
 
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(12.dp))
 
+                            // 2. RIGA INFORMAZIONI: Serie, Reps, Timer con ICONE
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("${exercise.sets} Serie x ${exercise.reps} Reps", style = MaterialTheme.typography.bodyLarge)
+
+                                // ICONA E TESTO SERIE
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.List, contentDescription = "Serie", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("${exercise.sets} Serie", style = MaterialTheme.typography.bodyLarge)
+                                }
+
+                                // ICONA E TESTO REPETIZIONI
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Refresh, contentDescription = "Ripetizioni", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("${exercise.reps} Reps", style = MaterialTheme.typography.bodyLarge)
+                                }
+
+                                // TIMER
                                 val min = exercise.restSeconds / 60
                                 val sec = exercise.restSeconds % 60
                                 Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
@@ -108,6 +158,7 @@ fun CreateWorkoutScreen(
                         }
                     }
                 }
+
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
@@ -126,9 +177,7 @@ fun CreateWorkoutScreen(
             }
         }
 
-        // =====================================================================
-        // NUOVO POPUP: CONFERMA RIMOZIONE ESERCIZIO DALLA SCHEDA
-        // =====================================================================
+        // POPUP CONFERMA RIMOZIONE ESERCIZIO DALLA SCHEDA
         if (indexToRemoveFromTemplate != null) {
             val exName = exercises[indexToRemoveFromTemplate!!].exerciseName
             AlertDialog(
@@ -150,9 +199,7 @@ fun CreateWorkoutScreen(
             )
         }
 
-        // =====================================================================
-        // POPUP 1: SELEZIONA ESERCIZIO DALLA LISTA
-        // =====================================================================
+        // POPUP SELEZIONA ESERCIZIO DALLA LISTA
         if (dialogState == DialogState.SELECT_EXERCISE) {
             var searchQuery by remember { mutableStateOf("") }
             val filteredExercises = availableExercises.filter { it.name.contains(searchQuery, ignoreCase = true) }
@@ -188,25 +235,17 @@ fun CreateWorkoutScreen(
                                 HorizontalDivider()
                             }
                             if (filteredExercises.isEmpty()) {
-                                item {
-                                    Text("Nessun esercizio trovato.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
+                                item { Text("Nessun esercizio trovato.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             }
                         }
                     }
                 },
-                confirmButton = {
-                    Button(onClick = { dialogState = DialogState.NEW_EXERCISE }) { Text("Nuovo Esercizio") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { dialogState = DialogState.HIDDEN }) { Text("Annulla") }
-                }
+                confirmButton = { Button(onClick = { dialogState = DialogState.NEW_EXERCISE }) { Text("Nuovo Esercizio") } },
+                dismissButton = { TextButton(onClick = { dialogState = DialogState.HIDDEN }) { Text("Annulla") } }
             )
         }
 
-        // =====================================================================
-        // POPUP 1.B: CONFERMA ELIMINAZIONE ESERCIZIO DAL DATABASE
-        // =====================================================================
+        // POPUP CONFERMA ELIMINAZIONE ESERCIZIO DAL DATABASE
         if (exerciseToDeleteFromDb != null) {
             AlertDialog(
                 onDismissRequest = { exerciseToDeleteFromDb = null },
@@ -225,9 +264,7 @@ fun CreateWorkoutScreen(
             )
         }
 
-        // =====================================================================
-        // POPUP 2: CREA NUOVO ESERCIZIO
-        // =====================================================================
+        // POPUP CREA NUOVO ESERCIZIO
         if (dialogState == DialogState.NEW_EXERCISE) {
             var newExerciseName by remember { mutableStateOf("") }
 
@@ -249,15 +286,11 @@ fun CreateWorkoutScreen(
                         }
                     }) { Text("Aggiungi") }
                 },
-                dismissButton = {
-                    TextButton(onClick = { dialogState = DialogState.SELECT_EXERCISE }) { Text("Indietro") }
-                }
+                dismissButton = { TextButton(onClick = { dialogState = DialogState.SELECT_EXERCISE }) { Text("Indietro") } }
             )
         }
 
-        // =====================================================================
-        // POPUP 3: CONFIGURA ESERCIZIO (Serie, Reps, Recupero)
-        // =====================================================================
+        // POPUP CONFIGURA ESERCIZIO
         if (dialogState == DialogState.CONFIG_EXERCISE) {
             val initialConfig = if (editingIndex != null) exercises[editingIndex!!] else null
 
