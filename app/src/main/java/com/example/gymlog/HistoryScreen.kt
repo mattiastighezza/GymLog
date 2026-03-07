@@ -9,7 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,7 +46,7 @@ fun HistoryScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Storico Progressi") },
-                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, "Indietro") } }
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro") } }
             )
         }
     ) { paddingValues ->
@@ -153,9 +154,13 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         ExposedDropdownMenuBox(expanded = expandedDropdown, onExpandedChange = { expandedDropdown = !expandedDropdown }) {
             OutlinedTextField(
-                value = selectedExercise, onValueChange = {}, readOnly = true, label = { Text("Seleziona Esercizio") },
+                value = selectedExercise,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Seleziona Esercizio") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
-                modifier = Modifier.fillMaxWidth().menuAnchor()
+                // RISOLTO IL WARNING menuAnchor: aggiunto il parametro type
+                modifier = Modifier.fillMaxWidth().menuAnchor(type = MenuAnchorType.PrimaryNotEditable)
             )
             ExposedDropdownMenu(expanded = expandedDropdown, onDismissRequest = { expandedDropdown = false }) {
                 allExercises.forEach { exerciseName ->
@@ -216,219 +221,223 @@ fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modif
 
     var touchX by remember { mutableStateOf<Float?>(null) }
 
-    Canvas(
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull()
-                        if (change != null) {
-                            if (change.pressed) {
-                                touchX = change.position.x
-                            } else {
-                                touchX = null
+    Box(modifier = modifier) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull()
+                            if (change != null) {
+                                if (change.pressed) {
+                                    touchX = change.position.x
+                                } else {
+                                    touchX = null
+                                }
                             }
                         }
                     }
                 }
-            }
-    ) {
-        val paddingLeft = 120f
-        val paddingBottom = 120f // SPAZIO AUMENTATO PER IL MESSAGGIO INFERIORE
-        val paddingTop = 140f // SPAZIO AUMENTATO PER L'UNITA' DI MISURA
-        val paddingRight = 80f
+        ) {
+            val paddingLeft = 120f
+            val paddingBottom = 120f
+            val paddingTop = 140f
+            val paddingRight = 80f
 
-        val axisExtension = 40f
-        val topOfAxis = paddingTop - axisExtension
+            val axisExtension = 40f
+            val topOfAxis = paddingTop - axisExtension
 
-        val chartWidth = size.width - paddingLeft - paddingRight
-        val chartHeight = size.height - paddingTop - paddingBottom
+            val chartWidth = size.width - paddingLeft - paddingRight
+            val chartHeight = size.height - paddingTop - paddingBottom
 
-        val axisColor = Color.Gray.copy(alpha=0.5f)
+            val axisColor = Color.Gray.copy(alpha=0.5f)
 
-        // ==========================================
-        // DISEGNO DEGLI ASSI E DELLE FRECCE
-        // ==========================================
-        drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft, size.height - paddingBottom), strokeWidth = 2f)
-        drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft - 6f, topOfAxis + 10f), strokeWidth = 2f)
-        drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft + 6f, topOfAxis + 10f), strokeWidth = 2f)
+            drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft, size.height - paddingBottom), strokeWidth = 2f)
+            drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft - 6f, topOfAxis + 10f), strokeWidth = 2f)
+            drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft + 6f, topOfAxis + 10f), strokeWidth = 2f)
 
-        drawLine(axisColor, Offset(paddingLeft, size.height - paddingBottom), Offset(size.width - paddingRight + 10f, size.height - paddingBottom), strokeWidth = 2f)
-        drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom - 6f), strokeWidth = 2f)
-        drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom + 6f), strokeWidth = 2f)
+            drawLine(axisColor, Offset(paddingLeft, size.height - paddingBottom), Offset(size.width - paddingRight + 10f, size.height - paddingBottom), strokeWidth = 2f)
+            drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom - 6f), strokeWidth = 2f)
+            drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom + 6f), strokeWidth = 2f)
 
-        // DISEGNO UNITA' DI MISURA
-        val unitLabel = "[$unit]"
-        val unitStyle = labelStyle.copy(fontWeight = FontWeight.Bold)
-        val unitResult = textMeasurer.measure(unitLabel, unitStyle)
-        // Posizioniamo la scritta assicurandoci che la sua BASE sia sopra la punta della freccia!
-        val unitY = topOfAxis - unitResult.size.height - 10f
-        drawText(
-            textMeasurer,
-            unitLabel,
-            Offset(paddingLeft - unitResult.size.width / 2, unitY),
-            style = unitStyle
-        )
+            val unitLabel = "[$unit]"
+            val unitStyle = labelStyle.copy(fontWeight = FontWeight.Bold)
+            val unitResult = textMeasurer.measure(unitLabel, unitStyle)
+            val unitY = topOfAxis - unitResult.size.height - 10f
+            drawText(
+                textMeasurer,
+                unitLabel,
+                Offset(paddingLeft - unitResult.size.width / 2, unitY),
+                style = unitStyle
+            )
 
-        val rawMax = data.maxOf { it.second }
-        val rawMin = data.minOf { it.second }
+            val rawMax = data.maxOf { it.second }
+            val rawMin = data.minOf { it.second }
 
-        val minRounded = if (data.size == 1) {
-            if (rawMin > 10) (Math.floor(((rawMin - 10) / 10).toDouble()) * 10).toFloat() else 0f
-        } else {
-            (Math.floor((rawMin / 10).toDouble()) * 10).toFloat()
-        }
-
-        var maxRounded = if (data.size == 1) {
-            (Math.ceil(((rawMax + 10) / 10).toDouble()) * 10).toFloat()
-        } else {
-            (Math.ceil((rawMax / 10).toDouble()) * 10).toFloat()
-        }
-
-        if (maxRounded <= minRounded) maxRounded = minRounded + 10f
-
-        val rangeY = maxRounded - minRounded
-        val stepY = rangeY / 5f
-        val dashedEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
-
-        // GRIGLIA Y
-        for (i in 0..5) {
-            val currentYVal = minRounded + (stepY * i)
-            val y = paddingTop + chartHeight - ((currentYVal - minRounded) / rangeY * chartHeight)
-
-            if (i > 0) {
-                drawLine(
-                    color = Color.Gray.copy(alpha = 0.3f),
-                    start = Offset(paddingLeft, y),
-                    end = Offset(size.width - paddingRight, y),
-                    strokeWidth = 2f,
-                    pathEffect = dashedEffect
-                )
+            val minRounded = if (data.size == 1) {
+                if (rawMin > 10) (Math.floor(((rawMin - 10) / 10).toDouble()) * 10).toFloat() else 0f
+            } else {
+                (Math.floor((rawMin / 10).toDouble()) * 10).toFloat()
             }
 
-            val text = if (currentYVal % 1f == 0f) String.format("%.0f", currentYVal) else String.format("%.1f", currentYVal)
-            val measuredText = textMeasurer.measure(text, labelStyle)
-            drawText(textMeasurer, text, Offset(paddingLeft - measuredText.size.width - 16f, y - measuredText.size.height / 2), style = labelStyle)
-        }
-
-        val stepX = if (data.size > 1) chartWidth / (data.size - 1) else 0f
-        val pointsX = data.indices.map { index ->
-            if (data.size == 1) paddingLeft + chartWidth / 2 else paddingLeft + (index * stepX)
-        }
-
-        val path = Path()
-        val xIndicesToShow = mutableSetOf<Int>()
-        xIndicesToShow.add(0)
-        if (data.size <= 6) {
-            xIndicesToShow.addAll(data.indices)
-        } else {
-            for (i in 1..5) {
-                xIndicesToShow.add(((data.size - 1) * i) / 5)
+            var maxRounded = if (data.size == 1) {
+                (Math.ceil(((rawMax + 10) / 10).toDouble()) * 10).toFloat()
+            } else {
+                (Math.ceil((rawMax / 10).toDouble()) * 10).toFloat()
             }
-        }
 
-        data.forEachIndexed { index, pair ->
-            val x = pointsX[index]
-            val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
+            if (maxRounded <= minRounded) maxRounded = minRounded + 10f
 
-            if (xIndicesToShow.contains(index)) {
-                if (index > 0 && data.size > 1) {
+            val rangeY = maxRounded - minRounded
+            val stepY = rangeY / 5f
+            val dashedEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+
+            for (i in 0..5) {
+                val currentYVal = minRounded + (stepY * i)
+                val y = paddingTop + chartHeight - ((currentYVal - minRounded) / rangeY * chartHeight)
+
+                if (i > 0) {
                     drawLine(
                         color = Color.Gray.copy(alpha = 0.3f),
-                        start = Offset(x, paddingTop),
-                        end = Offset(x, size.height - paddingBottom),
+                        start = Offset(paddingLeft, y),
+                        end = Offset(size.width - paddingRight, y),
                         strokeWidth = 2f,
                         pathEffect = dashedEffect
                     )
                 }
 
-                val dateLabel = pair.first.take(5)
-                val measuredDate = textMeasurer.measure(dateLabel, labelStyle)
-                drawText(textMeasurer, dateLabel, Offset(x - measuredDate.size.width / 2, size.height - paddingBottom + 16f), style = labelStyle)
+                // RISOLTO IL WARNING String.format: aggiunto Locale.getDefault()
+                val text = if (currentYVal % 1f == 0f) {
+                    String.format(Locale.getDefault(), "%.0f", currentYVal)
+                } else {
+                    String.format(Locale.getDefault(), "%.1f", currentYVal)
+                }
+                val measuredText = textMeasurer.measure(text, labelStyle)
+                drawText(textMeasurer, text, Offset(paddingLeft - measuredText.size.width - 16f, y - measuredText.size.height / 2), style = labelStyle)
             }
 
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            drawCircle(color, radius = 8f, center = Offset(x, y))
-        }
+            val stepX = if (data.size > 1) chartWidth / (data.size - 1) else 0f
+            val pointsX = data.indices.map { index ->
+                if (data.size == 1) paddingLeft + chartWidth / 2 else paddingLeft + (index * stepX)
+            }
 
-        if (data.size > 1) {
-            drawPath(path, color, style = Stroke(width = 6f))
-        } else {
-            // ==========================================
-            // MESSAGGIO PER UN SOLO PUNTO
-            // Disegnato sul canvas molto sotto l'asse X!
-            // ==========================================
-            val msg = "(Fai un altro allenamento per creare la curva)"
-            val msgResult = textMeasurer.measure(msg, tipStyle)
-            drawText(
-                textMeasurer,
-                msg,
-                // x = centrato nello schermo, y = in fondo al canvas
-                Offset((size.width - msgResult.size.width) / 2, size.height - 40f),
-                style = tipStyle
-            )
-        }
-
-        // ==========================================
-        // TOOLTIP INTERATTIVO
-        // ==========================================
-        touchX?.let { tx ->
-            var closestIndex = 0
-            var minDiff = Float.MAX_VALUE
-            pointsX.forEachIndexed { index, px ->
-                val diff = kotlin.math.abs(px - tx)
-                if (diff < minDiff) {
-                    minDiff = diff
-                    closestIndex = index
+            val path = Path()
+            val xIndicesToShow = mutableSetOf<Int>()
+            xIndicesToShow.add(0)
+            if (data.size <= 6) {
+                xIndicesToShow.addAll(data.indices)
+            } else {
+                for (i in 1..5) {
+                    xIndicesToShow.add(((data.size - 1) * i) / 5)
                 }
             }
 
-            val snappedX = pointsX[closestIndex]
-            val pair = data[closestIndex]
-            val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
+            data.forEachIndexed { index, pair ->
+                val x = pointsX[index]
+                val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
-            drawLine(
-                color = color.copy(alpha = 0.7f),
-                start = Offset(snappedX, topOfAxis),
-                end = Offset(snappedX, size.height - paddingBottom),
-                strokeWidth = 4f,
-                pathEffect = dashedEffect
-            )
+                if (xIndicesToShow.contains(index)) {
+                    if (index > 0 && data.size > 1) {
+                        drawLine(
+                            color = Color.Gray.copy(alpha = 0.3f),
+                            start = Offset(x, paddingTop),
+                            end = Offset(x, size.height - paddingBottom),
+                            strokeWidth = 2f,
+                            pathEffect = dashedEffect
+                        )
+                    }
 
-            drawCircle(Color.White, radius = 14f, center = Offset(snappedX, y))
-            drawCircle(color, radius = 10f, center = Offset(snappedX, y))
+                    val dateLabel = pair.first.take(5)
+                    val measuredDate = textMeasurer.measure(dateLabel, labelStyle)
+                    drawText(textMeasurer, dateLabel, Offset(x - measuredDate.size.width / 2, size.height - paddingBottom + 16f), style = labelStyle)
+                }
 
-            val valText = if (pair.second % 1f == 0f) String.format("%.0f", pair.second) else String.format("%.1f", pair.second)
-            val tooltipText = "$valText $unit\n${pair.first.take(5)}"
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                drawCircle(color, radius = 8f, center = Offset(x, y))
+            }
 
-            val textLayoutResult = textMeasurer.measure(
-                text = tooltipText,
-                style = labelStyle.copy(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-            )
+            if (data.size > 1) {
+                drawPath(path, color, style = Stroke(width = 6f))
+            }
 
-            val tooltipWidth = textLayoutResult.size.width + 32f
-            val tooltipHeight = textLayoutResult.size.height + 16f
+            touchX?.let { tx ->
+                var closestIndex = 0
+                var minDiff = Float.MAX_VALUE
+                pointsX.forEachIndexed { index, px ->
+                    val diff = kotlin.math.abs(px - tx)
+                    if (diff < minDiff) {
+                        minDiff = diff
+                        closestIndex = index
+                    }
+                }
 
-            var tooltipLeft = snappedX - tooltipWidth / 2
-            if (tooltipLeft < paddingLeft) tooltipLeft = paddingLeft
-            if (tooltipLeft + tooltipWidth > size.width - paddingRight) tooltipLeft = size.width - paddingRight - tooltipWidth
+                val snappedX = pointsX[closestIndex]
+                val pair = data[closestIndex]
+                val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
-            val tooltipTop = y - tooltipHeight - 20f
-            val finalTop = if (tooltipTop < topOfAxis) y + 24f else tooltipTop
+                drawLine(
+                    color = color.copy(alpha = 0.7f),
+                    start = Offset(snappedX, topOfAxis),
+                    end = Offset(snappedX, size.height - paddingBottom),
+                    strokeWidth = 4f,
+                    pathEffect = dashedEffect
+                )
 
-            drawRoundRect(
-                color = Color.DarkGray.copy(alpha = 0.9f),
-                topLeft = Offset(tooltipLeft, finalTop),
-                size = Size(tooltipWidth, tooltipHeight),
-                cornerRadius = CornerRadius(12f, 12f)
-            )
+                drawCircle(Color.White, radius = 14f, center = Offset(snappedX, y))
+                drawCircle(color, radius = 10f, center = Offset(snappedX, y))
 
-            drawText(
-                textLayoutResult,
-                topLeft = Offset(tooltipLeft + 16f, finalTop + 8f)
-            )
+                // RISOLTO IL WARNING String.format: aggiunto Locale.getDefault()
+                val valText = if (pair.second % 1f == 0f) {
+                    String.format(Locale.getDefault(), "%.0f", pair.second)
+                } else {
+                    String.format(Locale.getDefault(), "%.1f", pair.second)
+                }
+                val tooltipText = "$valText $unit\n${pair.first.take(5)}"
+
+                val textLayoutResult = textMeasurer.measure(
+                    text = tooltipText,
+                    style = labelStyle.copy(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                )
+
+                val tooltipWidth = textLayoutResult.size.width + 32f
+                val tooltipHeight = textLayoutResult.size.height + 16f
+
+                var tooltipLeft = snappedX - tooltipWidth / 2
+                if (tooltipLeft < paddingLeft) tooltipLeft = paddingLeft
+                if (tooltipLeft + tooltipWidth > size.width - paddingRight) tooltipLeft = size.width - paddingRight - tooltipWidth
+
+                val tooltipTop = y - tooltipHeight - 20f
+                val finalTop = if (tooltipTop < topOfAxis - 20f) y + 24f else tooltipTop
+
+                drawRoundRect(
+                    color = Color.DarkGray.copy(alpha = 0.9f),
+                    topLeft = Offset(tooltipLeft, finalTop),
+                    size = Size(tooltipWidth, tooltipHeight),
+                    cornerRadius = CornerRadius(12f, 12f)
+                )
+
+                drawText(
+                    textLayoutResult,
+                    topLeft = Offset(tooltipLeft + 16f, finalTop + 8f)
+                )
+            }
+        }
+
+        if (data.size == 1) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "(Fai un altro allenamento per creare la curva)",
+                    style = tipStyle,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
