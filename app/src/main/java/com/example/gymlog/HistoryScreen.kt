@@ -17,14 +17,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -164,7 +168,6 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
                 Text("Peso Max (kg)", fontWeight = if (!showVolume) FontWeight.Bold else FontWeight.Normal)
             }
             TextButton(onClick = { showVolume = true }, modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColors(contentColor = if (showVolume) MaterialTheme.colorScheme.primary else Color.Gray)) {
-                // Testo più esplicativo per il tempo!
                 Text(if (isSelectedTimeBased) "Tempo Tot. (s)" else "Volume", fontWeight = if (showVolume) FontWeight.Bold else FontWeight.Normal)
             }
         }
@@ -176,16 +179,13 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
             if (exercise != null) {
                 val value = if (showVolume) {
                     if (exercise.isTimeBased) {
-                        // GRAFICO TEMPO: ORA FA LA SOMMA (es. 30 + 20 + 5 = 55s totali)
                         val totalSec = exercise.sets.filter { it.completed }.sumOf { it.timeSeconds }.toFloat()
                         if (totalSec > 0) totalSec else null
                     } else {
-                        // GRAFICO VOLUME
                         val vol = exercise.sets.filter { it.completed }.sumOf { it.weight * it.reps }.toFloat()
                         if (vol > 0) vol else null
                     }
                 } else {
-                    // GRAFICO PESO
                     val maxW = exercise.sets.filter { it.completed }.maxOfOrNull { it.weight }?.toFloat()
                     if (maxW != null) maxW else null
                 }
@@ -203,42 +203,66 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
 
 @Composable
 fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier, color: Color) {
-    if (data.size < 2) {
-        Box(modifier, contentAlignment = Alignment.Center) {
-            val textValue = if (data.first().second % 1f == 0f) String.format("%.0f", data.first().second) else data.first().second.toString()
-            Text("Valore: $textValue", style = MaterialTheme.typography.titleLarge, color = color)
-            Text("\n\n(Fai un altro allenamento per creare la curva)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-        }
-        return
-    }
-
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-    Canvas(modifier = modifier) {
+    // VARIABILE REATTIVA PER TRACCIARE IL DITO SULLO SCHERMO
+    var touchX by remember { mutableStateOf<Float?>(null) }
+
+    Canvas(
+        modifier = modifier.pointerInput(Unit) {
+            // IL MOTORE DELL'INTERATTIVITA': Registra quando premi e scorri il dito
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull()
+                    if (change != null) {
+                        if (change.pressed) {
+                            touchX = change.position.x
+                        } else {
+                            touchX = null // Il dito è stato sollevato
+                        }
+                    }
+                }
+            }
+        }
+    ) {
         val paddingLeft = 100f
         val paddingBottom = 80f
-        val paddingTop = 40f
+        val paddingTop = 60f // Rialzato per fare spazio al testo per 1 punto
         val paddingRight = 60f
 
         val chartWidth = size.width - paddingLeft - paddingRight
         val chartHeight = size.height - paddingTop - paddingBottom
 
+        // DISEGNO DEGLI ASSI
         drawLine(Color.Gray.copy(alpha=0.5f), Offset(paddingLeft, paddingTop), Offset(paddingLeft, size.height - paddingBottom), strokeWidth = 2f)
         drawLine(Color.Gray.copy(alpha=0.5f), Offset(paddingLeft, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom), strokeWidth = 2f)
 
         val rawMax = data.maxOf { it.second }
         val rawMin = data.minOf { it.second }
 
-        val minRounded = (Math.floor((rawMin / 10).toDouble()) * 10).toFloat()
-        var maxRounded = (Math.ceil((rawMax / 10).toDouble()) * 10).toFloat()
-        if (maxRounded == minRounded) maxRounded += 10f
+        // CALCOLO SCALA VALORI (anche per un punto solo creiamo un range di 20)
+        val minRounded = if (data.size == 1) {
+            if (rawMin > 10) (Math.floor(((rawMin - 10) / 10).toDouble()) * 10).toFloat() else 0f
+        } else {
+            (Math.floor((rawMin / 10).toDouble()) * 10).toFloat()
+        }
+
+        var maxRounded = if (data.size == 1) {
+            (Math.ceil(((rawMax + 10) / 10).toDouble()) * 10).toFloat()
+        } else {
+            (Math.ceil((rawMax / 10).toDouble()) * 10).toFloat()
+        }
+
+        if (maxRounded <= minRounded) maxRounded = minRounded + 10f
 
         val rangeY = maxRounded - minRounded
         val stepY = rangeY / 5f
 
         val dashedEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
 
+        // DISEGNO LINEE ORIZZONTALI (GRIGLIA)
         for (i in 0..5) {
             val currentYVal = minRounded + (stepY * i)
             val y = paddingTop + chartHeight - ((currentYVal - minRounded) / rangeY * chartHeight)
@@ -258,9 +282,15 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
             drawText(textMeasurer, text, Offset(paddingLeft - measuredText.size.width - 16f, y - measuredText.size.height / 2), style = labelStyle)
         }
 
-        val stepX = chartWidth / (data.size - 1)
+        // CALCOLO COORDINATE X DEI PUNTI
+        val stepX = if (data.size > 1) chartWidth / (data.size - 1) else 0f
+        val pointsX = data.indices.map { index ->
+            if (data.size == 1) paddingLeft + chartWidth / 2 else paddingLeft + (index * stepX)
+        }
+
         val path = Path()
 
+        // Quali etichette delle date mostrare sotto
         val xIndicesToShow = mutableSetOf<Int>()
         xIndicesToShow.add(0)
         if (data.size <= 6) {
@@ -271,8 +301,9 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
             }
         }
 
+        // DISEGNO CURVA E PUNTI
         data.forEachIndexed { index, pair ->
-            val x = paddingLeft + (index * stepX)
+            val x = pointsX[index]
             val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
             if (xIndicesToShow.contains(index)) {
@@ -286,7 +317,7 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
                     )
                 }
 
-                val dateLabel = pair.first.take(5)
+                val dateLabel = pair.first.take(5) // Mostra solo "gg/MM"
                 val measuredDate = textMeasurer.measure(dateLabel, labelStyle)
                 drawText(textMeasurer, dateLabel, Offset(x - measuredDate.size.width / 2, size.height - paddingBottom + 16f), style = labelStyle)
             }
@@ -296,6 +327,87 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
             drawCircle(color, radius = 8f, center = Offset(x, y))
         }
 
-        drawPath(path, color, style = Stroke(width = 6f))
+        // Disegna la curva solo se c'è più di un punto
+        if (data.size > 1) {
+            drawPath(path, color, style = Stroke(width = 6f))
+        } else {
+            // Messaggio per un punto solo
+            val msg = "(Fai un altro allenamento per creare la curva)"
+            val msgResult = textMeasurer.measure(msg, labelStyle)
+            drawText(
+                textMeasurer,
+                msg,
+                Offset(paddingLeft + (chartWidth - msgResult.size.width) / 2, paddingTop - 24f),
+                style = labelStyle
+            )
+        }
+
+        // ==========================================
+        // DISEGNO DEL CURSORE MAGNETICO INTERATTIVO
+        // ==========================================
+        touchX?.let { tx ->
+            // Trova l'indice del punto più vicino al dito
+            var closestIndex = 0
+            var minDiff = Float.MAX_VALUE
+            pointsX.forEachIndexed { index, px ->
+                val diff = kotlin.math.abs(px - tx)
+                if (diff < minDiff) {
+                    minDiff = diff
+                    closestIndex = index
+                }
+            }
+
+            val snappedX = pointsX[closestIndex]
+            val pair = data[closestIndex]
+            val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
+
+            // Disegna la linea tratteggiata che segue il cursore
+            drawLine(
+                color = color.copy(alpha = 0.7f),
+                start = Offset(snappedX, paddingTop),
+                end = Offset(snappedX, size.height - paddingBottom),
+                strokeWidth = 4f,
+                pathEffect = dashedEffect
+            )
+
+            // Pallino bianco e colorato per evidenziare l'aggancio
+            drawCircle(Color.White, radius = 14f, center = Offset(snappedX, y))
+            drawCircle(color, radius = 10f, center = Offset(snappedX, y))
+
+            // Costruiamo il rettangolo del Tooltip
+            val valText = if (pair.second % 1f == 0f) String.format("%.0f", pair.second) else String.format("%.1f", pair.second)
+            val tooltipText = "$valText\n${pair.first.take(5)}"
+
+            val textLayoutResult = textMeasurer.measure(
+                text = tooltipText,
+                style = labelStyle.copy(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            )
+
+            val tooltipWidth = textLayoutResult.size.width + 32f
+            val tooltipHeight = textLayoutResult.size.height + 16f
+
+            // Facciamo in modo che il tooltip non esca mai fuori dallo schermo!
+            var tooltipLeft = snappedX - tooltipWidth / 2
+            if (tooltipLeft < paddingLeft) tooltipLeft = paddingLeft
+            if (tooltipLeft + tooltipWidth > size.width - paddingRight) tooltipLeft = size.width - paddingRight - tooltipWidth
+
+            // Posizioniamo il tooltip sopra al pallino, o sotto se sbatte in alto
+            val tooltipTop = y - tooltipHeight - 20f
+            val finalTop = if (tooltipTop < 0f) y + 24f else tooltipTop
+
+            // Sfondo scuro del tooltip
+            drawRoundRect(
+                color = Color.DarkGray.copy(alpha = 0.9f),
+                topLeft = Offset(tooltipLeft, finalTop),
+                size = Size(tooltipWidth, tooltipHeight),
+                cornerRadius = CornerRadius(12f, 12f)
+            )
+
+            // Testo del tooltip
+            drawText(
+                textLayoutResult,
+                topLeft = Offset(tooltipLeft + 16f, finalTop + 8f)
+            )
+        }
     }
 }
