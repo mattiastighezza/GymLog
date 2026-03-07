@@ -376,7 +376,7 @@ fun CreateWorkoutScreen(
             var reps by remember { mutableStateOf(if (initialConfig?.reps != 0 && initialConfig != null) initialConfig.reps.toString() else "") }
             var timeSeconds by remember { mutableStateOf(if (initialConfig?.timeSeconds != 0 && initialConfig != null) initialConfig.timeSeconds.toString() else "") }
 
-            val initialRestTarget = initialConfig?.restSeconds ?: 90
+            val initialRestTarget = initialConfig?.restSeconds ?: 60
             val closestValidRest = restTimerOptions.minByOrNull { abs(it - initialRestTarget) } ?: 90
             var finalRestSeconds by remember { mutableStateOf(closestValidRest) }
 
