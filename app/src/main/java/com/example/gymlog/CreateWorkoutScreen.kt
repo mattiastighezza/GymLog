@@ -24,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
@@ -32,7 +33,6 @@ import kotlin.math.abs
 
 enum class DialogState { HIDDEN, SELECT_EXERCISE, NEW_EXERCISE, CONFIG_EXERCISE }
 
-// NUOVO COMPONENTE: Il Selettore Rotante per il Timer!
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WheelTimePicker(
@@ -40,67 +40,42 @@ fun WheelTimePicker(
     initialValue: Int,
     onValueChange: (Int) -> Unit
 ) {
-    // Cerchiamo l'indice iniziale. Se il valore non esiste, parte dal primo (0s)
     val initialIndex = options.indexOf(initialValue).takeIf { it >= 0 } ?: 0
     val pagerState = rememberPagerState(initialPage = initialIndex) { options.size }
 
-    // Ogni volta che il pager si ferma su una pagina, comunichiamo il nuovo valore
     LaunchedEffect(pagerState.currentPage) {
         onValueChange(options[pagerState.currentPage])
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(130.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        // Sfondo colorato per evidenziare la selezione centrale
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(8.dp)
-                )
-        )
+    Box(modifier = Modifier.fillMaxWidth().height(130.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxWidth().height(44.dp).background(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), shape = RoundedCornerShape(8.dp)))
 
-        // Il vero e proprio rullo scorrevole
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 43.dp), // Spazio per mostrare l'elemento sopra e sotto
+            contentPadding = PaddingValues(vertical = 43.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) { page ->
             val isSelected = page == pagerState.currentPage
             val optionSeconds = options[page]
 
-            // Formattazione furba del testo (es. "1m 15s")
             val text = if (optionSeconds == 0) "Nessun riposo" else {
                 val m = optionSeconds / 60
                 val s = optionSeconds % 60
                 if (m == 0) "${s}s" else if (s == 0) "${m}m" else "${m}m ${s}s"
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
                 Text(
                     text = text,
                     style = if (isSelected) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    // Sfuma il colore degli elementi non selezionati
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                 )
             }
         }
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,7 +97,6 @@ fun CreateWorkoutScreen(
     var exerciseToDeleteFromDb by remember { mutableStateOf<Exercise?>(null) }
     var indexToRemoveFromTemplate by remember { mutableStateOf<Int?>(null) }
 
-    // Generiamo la lista dinamica per il timer (Scatti di 5s fino a 60, poi scatti di 15s fino a 10 min)
     val restTimerOptions = remember {
         val opts = mutableListOf<Int>()
         for (i in 0..60 step 5) opts.add(i)
@@ -186,7 +160,7 @@ fun CreateWorkoutScreen(
                                                 exercises = newList
                                             },
                                             modifier = Modifier.size(32.dp)
-                                        ) { Icon(Icons.Default.KeyboardArrowUp, "Sposta Su", tint = MaterialTheme.colorScheme.primary) }
+                                        ) { Icon(Icons.Default.KeyboardArrowUp, "Su", tint = MaterialTheme.colorScheme.primary) }
                                     }
 
                                     if (index < exercises.size - 1) {
@@ -199,17 +173,28 @@ fun CreateWorkoutScreen(
                                                 exercises = newList
                                             },
                                             modifier = Modifier.size(32.dp)
-                                        ) { Icon(Icons.Default.KeyboardArrowDown, "Sposta Giù", tint = MaterialTheme.colorScheme.primary) }
+                                        ) { Icon(Icons.Default.KeyboardArrowDown, "Giù", tint = MaterialTheme.colorScheme.primary) }
                                     }
 
                                     IconButton(
                                         onClick = { indexToRemoveFromTemplate = index },
                                         modifier = Modifier.size(32.dp).padding(start = 4.dp)
-                                    ) { Icon(Icons.Default.Delete, "Rimuovi dalla scheda", tint = MaterialTheme.colorScheme.error) }
+                                    ) { Icon(Icons.Default.Delete, "Rimuovi", tint = MaterialTheme.colorScheme.error) }
                                 }
                             }
 
-                            Spacer(Modifier.height(12.dp))
+                            // SE ESISTE LA NOTA, LA MOSTRIAMO SOTTO IL NOME
+                            if (exercise.note.isNotBlank()) {
+                                Text(
+                                    text = "📝 ${exercise.note}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontStyle = FontStyle.Italic,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
 
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -283,7 +268,7 @@ fun CreateWorkoutScreen(
                         OutlinedTextField(
                             value = searchQuery, onValueChange = { searchQuery = it },
                             placeholder = { Text("Cerca...") },
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Default.Search, null) },
                             modifier = Modifier.fillMaxWidth(), singleLine = true
                         )
                         Spacer(modifier = Modifier.height(16.dp))
@@ -304,9 +289,6 @@ fun CreateWorkoutScreen(
                                     ) { Icon(Icons.Default.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) }
                                 }
                                 HorizontalDivider()
-                            }
-                            if (filteredExercises.isEmpty()) {
-                                item { Text("Nessun esercizio trovato.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             }
                         }
                     }
@@ -362,11 +344,11 @@ fun CreateWorkoutScreen(
         if (dialogState == DialogState.CONFIG_EXERCISE) {
             val initialConfig = if (editingIndex != null) exercises[editingIndex!!] else null
 
+            var note by remember { mutableStateOf(initialConfig?.note ?: "") } // CAMPO NOTA
             var sets by remember { mutableStateOf(if (initialConfig?.sets != 0 && initialConfig != null) initialConfig.sets.toString() else "") }
             var reps by remember { mutableStateOf(if (initialConfig?.reps != 0 && initialConfig != null) initialConfig.reps.toString() else "") }
 
-            // Per il timer: cerchiamo il valore più vicino nella lista (nel caso si modifichi una vecchia scheda con valori non standard)
-            val initialRestTarget = initialConfig?.restSeconds ?: 90 // Default 1m 30s
+            val initialRestTarget = initialConfig?.restSeconds ?: 90
             val closestValidRest = restTimerOptions.minByOrNull { abs(it - initialRestTarget) } ?: 90
             var finalRestSeconds by remember { mutableStateOf(closestValidRest) }
 
@@ -388,6 +370,17 @@ fun CreateWorkoutScreen(
                 },
                 text = {
                     Column {
+                        // IL CAMPO NOTE NEL POPUP!
+                        OutlinedTextField(
+                            value = note,
+                            onValueChange = { note = it },
+                            label = { Text("Note (es. 'Lento', 'Cavi')") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(value = sets, onValueChange = { sets = it }, label = { Text("Serie") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                             OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Ripetizioni") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
@@ -397,7 +390,6 @@ fun CreateWorkoutScreen(
                         Text("Tempo di recupero:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
 
-                        // IL NOSTRO NUOVO SELETTORE A RULLO!
                         WheelTimePicker(
                             options = restTimerOptions,
                             initialValue = finalRestSeconds,
@@ -407,7 +399,8 @@ fun CreateWorkoutScreen(
                 },
                 confirmButton = {
                     Button(onClick = {
-                        val newConfig = ExerciseConfig(selectedExerciseName, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, finalRestSeconds)
+                        // SALVIAMO ANCHE LA NOTA NELLA CONFIGURAZIONE!
+                        val newConfig = ExerciseConfig(selectedExerciseName, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, finalRestSeconds, note)
 
                         val newList = exercises.toMutableList()
                         if (editingIndex != null) newList[editingIndex!!] = newConfig else newList.add(newConfig)

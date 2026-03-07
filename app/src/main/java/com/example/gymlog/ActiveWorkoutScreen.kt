@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -27,18 +28,16 @@ fun ActiveWorkoutScreen(
     onBackClick: () -> Unit,
     onFinishWorkout: (WorkoutLog) -> Unit
 ) {
-    // Prepariamo la struttura dati: traduciamo le impostazioni della scheda in esercizi da compilare
     var loggedExercises by remember {
         mutableStateOf(template.exercises.map { config ->
             LoggedExercise(
                 exerciseName = config.exerciseName,
-                // Creiamo tante righe vuote quante sono le serie previste
+                note = config.note, // Carichiamo la nota dalla scheda
                 sets = List(config.sets) { LoggedSet(weight = 0.0, reps = config.reps, completed = false) }
             )
         })
     }
 
-    // Funzione per aggiornare una singola cella (peso, reps o spunta)
     fun updateSet(exIndex: Int, setIndex: Int, newSet: LoggedSet) {
         val newList = loggedExercises.toMutableList()
         val newSets = newList[exIndex].sets.toMutableList()
@@ -57,7 +56,6 @@ fun ActiveWorkoutScreen(
                 actions = {
                     Button(
                         onClick = {
-                            // Quando l'utente preme "Termina", creiamo il Log e lo passiamo a chi lo salverà
                             val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
                             val currentDateTime = LocalDateTime.now().format(formatter)
 
@@ -84,7 +82,6 @@ fun ActiveWorkoutScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Per ogni esercizio creiamo un riquadro visivo
             itemsIndexed(loggedExercises) { exIndex, exercise ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -97,9 +94,20 @@ fun ActiveWorkoutScreen(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
+
+                        // MOSTRIAMO LA NOTA DURANTE L'ALLENAMENTO
+                        if (exercise.note.isNotBlank()) {
+                            Text(
+                                text = "📝 ${exercise.note}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontStyle = FontStyle.Italic,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Intestazione tabella: Serie | kg | Reps | Fatto
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Set", modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                             Text("kg", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
@@ -109,9 +117,7 @@ fun ActiveWorkoutScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Le righe vere e proprie per ogni serie
                         exercise.sets.forEachIndexed { setIndex, loggedSet ->
-                            // Lo sfondo diventa verdino se la serie è completata
                             val bgColor = if (loggedSet.completed) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
 
                             Row(
@@ -121,10 +127,8 @@ fun ActiveWorkoutScreen(
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 1. Numero Serie
                                 Text("${setIndex + 1}", modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center)
 
-                                // 2. Input per i kg
                                 OutlinedTextField(
                                     value = if (loggedSet.weight == 0.0) "" else loggedSet.weight.toString(),
                                     onValueChange = { newValue ->
@@ -136,7 +140,6 @@ fun ActiveWorkoutScreen(
                                     textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
                                 )
 
-                                // 3. Input per le Ripetizioni (precompilato col target della scheda)
                                 OutlinedTextField(
                                     value = loggedSet.reps.toString(),
                                     onValueChange = { newValue ->
@@ -148,7 +151,6 @@ fun ActiveWorkoutScreen(
                                     textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
                                 )
 
-                                // 4. Checkbox Spunta completato
                                 Box(modifier = Modifier.weight(0.5f), contentAlignment = Alignment.Center) {
                                     IconButton(
                                         onClick = {
