@@ -20,18 +20,41 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun HomeScreen(
     templates: List<WorkoutTemplate>,
+    activeWorkoutTemplate: WorkoutTemplate?, // Sapere se c'è un allenamento in corso
     onCreateWorkoutClick: () -> Unit,
     onHistoryClick: () -> Unit,
     onStartWorkoutClick: (WorkoutTemplate) -> Unit,
-    onEditTemplate: (WorkoutTemplate) -> Unit, // NUOVO EVENTO
+    onResumeWorkoutClick: () -> Unit, // Riprendere allenamento
+    onEditTemplate: (WorkoutTemplate) -> Unit,
     onDeleteTemplate: (WorkoutTemplate) -> Unit
 ) {
-    // Variabile per gestire il popup di cancellazione
     var templateToDelete by remember { mutableStateOf<WorkoutTemplate?>(null) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("GymLog", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
+
+        // BANNER ALLENAMENTO IN CORSO
+        if (activeWorkoutTemplate != null) {
+            Card(
+                onClick = onResumeWorkoutClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Allenamento in corso", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(activeWorkoutTemplate.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Riprendi", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = onCreateWorkoutClick, modifier = Modifier.weight(1f).height(80.dp), shape = MaterialTheme.shapes.medium) {
@@ -61,11 +84,8 @@ fun HomeScreen(
                             }
 
                             Row {
-                                // Tasto Avvia
                                 IconButton(onClick = { onStartWorkoutClick(template) }) { Icon(Icons.Default.PlayArrow, "Avvia", tint = MaterialTheme.colorScheme.primary) }
-                                // Tasto Modifica
                                 IconButton(onClick = { onEditTemplate(template) }) { Icon(Icons.Default.Edit, "Modifica", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                // Tasto Elimina (Apre il popup)
                                 IconButton(onClick = { templateToDelete = template }) { Icon(Icons.Default.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) }
                             }
                         }
@@ -75,24 +95,15 @@ fun HomeScreen(
         }
     }
 
-    // Il Popup di Conferma Eliminazione Scheda
     if (templateToDelete != null) {
         AlertDialog(
             onDismissRequest = { templateToDelete = null },
             title = { Text("Elimina Scheda") },
-            text = { Text("Sei sicuro di voler eliminare la scheda '${templateToDelete?.name}'? Questa azione non può essere annullata.") },
+            text = { Text("Sei sicuro di voler eliminare la scheda '${templateToDelete?.name}'?") },
             confirmButton = {
-                Button(
-                    onClick = {
-                        onDeleteTemplate(templateToDelete!!)
-                        templateToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Elimina") }
+                Button(onClick = { onDeleteTemplate(templateToDelete!!); templateToDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Elimina") }
             },
-            dismissButton = {
-                TextButton(onClick = { templateToDelete = null }) { Text("Annulla") }
-            }
+            dismissButton = { TextButton(onClick = { templateToDelete = null }) { Text("Annulla") } }
         )
     }
 }

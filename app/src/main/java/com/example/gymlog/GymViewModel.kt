@@ -18,9 +18,15 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
     private val _workoutLogs = MutableStateFlow<List<WorkoutLog>>(emptyList())
     val workoutLogs: StateFlow<List<WorkoutLog>> = _workoutLogs
 
-    // NUOVO: La lista di tutti gli esercizi mai creati
     private val _exercises = MutableStateFlow<List<Exercise>>(emptyList())
     val exercises: StateFlow<List<Exercise>> = _exercises
+
+    // NUOVE VARIABILI PER L'ALLENAMENTO IN PAUSA/IN CORSO
+    private val _activeTemplate = MutableStateFlow<WorkoutTemplate?>(null)
+    val activeTemplate: StateFlow<WorkoutTemplate?> = _activeTemplate
+
+    private val _activeExercises = MutableStateFlow<List<LoggedExercise>?>(null)
+    val activeExercises: StateFlow<List<LoggedExercise>?> = _activeExercises
 
     init {
         loadTemplates()
@@ -50,7 +56,6 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
             val type = object : TypeToken<List<Exercise>>() {}.type
             _exercises.value = gson.fromJson(json, type)
         } else {
-            // Se è la prima volta che apre l'app, inseriamo due esercizi di base
             val defaultExercises = listOf(Exercise("Panca Piana"), Exercise("Squat"))
             _exercises.value = defaultExercises
             prefs.edit().putString("exercises", gson.toJson(defaultExercises)).apply()
@@ -95,13 +100,10 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putString("logs", gson.toJson(currentList)).apply()
     }
 
-    // NUOVE FUNZIONI: Aggiungi e Rimuovi Esercizio dalla libreria
     fun addExerciseToLibrary(name: String) {
         val currentList = _exercises.value.toMutableList()
-        // Controlliamo che non esista già (ignorando maiuscole/minuscole)
         if (currentList.none { it.name.equals(name, ignoreCase = true) }) {
             currentList.add(Exercise(name = name))
-            // Ordiniamo la lista alfabeticamente
             val sortedList = currentList.sortedBy { it.name }
             _exercises.value = sortedList
             prefs.edit().putString("exercises", gson.toJson(sortedList)).apply()
@@ -113,5 +115,39 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
         currentList.remove(exercise)
         _exercises.value = currentList
         prefs.edit().putString("exercises", gson.toJson(currentList)).apply()
+    }
+
+    // ==========================================================
+    // FUNZIONI PER L'ALLENAMENTO ATTIVO / PAUSA
+    // ==========================================================
+
+    fun startWorkout(template: WorkoutTemplate) {
+        // Se stiamo riavviando lo stesso allenamento già in corso, non resettiamo i dati!
+        if (_activeTemplate.value?.id == template.id && _activeExercises.value != null) return
+
+        _activeTemplate.value = template
+        _activeExercises.value = template.exercises.map { config ->
+            LoggedExercise(
+                exerciseName = config.exerciseName,
+                note = config.note,
+                isTimeBased = config.isTimeBased,
+                sets = List(config.sets) {
+                    LoggedSet(weight = 0.0, reps = config.reps, timeSeconds = config.timeSeconds, completed = false)
+                }
+            )
+        }
+    }
+
+    fun updateActiveSet(exIndex: Int, setIndex: Int, newSet: LoggedSet) {
+        val currentList = _activeExercises.value?.toMutableList() ?: return
+        val newSets = currentList[exIndex].sets.toMutableList()
+        newSets[setIndex] = newSet
+        currentList[exIndex] = currentList[exIndex].copy(sets = newSets)
+        _activeExercises.value = currentList
+    }
+
+    fun clearActiveWorkout() {
+        _activeTemplate.value = null
+        _activeExercises.value = null
     }
 }

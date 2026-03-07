@@ -2,6 +2,7 @@ package com.example.gymlog
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,33 +33,19 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun ActiveWorkoutScreen(
     template: WorkoutTemplate,
-    onBackClick: () -> Unit,
+    exercises: List<LoggedExercise>, // Riceviamo la lista in tempo reale dal ViewModel
+    onUpdateSet: (Int, Int, LoggedSet) -> Unit, // Diciamo al ViewModel di aggiornarsi
+    onPauseWorkout: () -> Unit,
+    onAbandonWorkout: () -> Unit,
     onFinishWorkout: (WorkoutLog) -> Unit
 ) {
-    var loggedExercises by remember {
-        mutableStateOf(template.exercises.map { config ->
-            LoggedExercise(
-                exerciseName = config.exerciseName,
-                note = config.note,
-                isTimeBased = config.isTimeBased,
-                sets = List(config.sets) {
-                    LoggedSet(
-                        weight = 0.0,
-                        reps = config.reps,
-                        timeSeconds = config.timeSeconds,
-                        completed = false
-                    )
-                }
-            )
-        })
-    }
+    // Variabili per i due Popup
+    var showPauseDialog by remember { mutableStateOf(false) }
+    var showAbandonDialog by remember { mutableStateOf(false) }
 
-    fun updateSet(exIndex: Int, setIndex: Int, newSet: LoggedSet) {
-        val newList = loggedExercises.toMutableList()
-        val newSets = newList[exIndex].sets.toMutableList()
-        newSets[setIndex] = newSet
-        newList[exIndex] = newList[exIndex].copy(sets = newSets)
-        loggedExercises = newList
+    // MAGIA: Intercetta il tasto fisico indietro di Android!
+    BackHandler {
+        showPauseDialog = true
     }
 
     Scaffold(
@@ -65,7 +53,8 @@ fun ActiveWorkoutScreen(
             TopAppBar(
                 title = { Text(template.name) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, "Indietro") }
+                    // Anche la freccia in alto a sinistra apre il popup
+                    IconButton(onClick = { showPauseDialog = true }) { Icon(Icons.Default.ArrowBack, "Indietro") }
                 },
                 actions = {
                     Button(
@@ -76,7 +65,7 @@ fun ActiveWorkoutScreen(
                             val finalLog = WorkoutLog(
                                 templateName = template.name,
                                 date = currentDateTime,
-                                exercises = loggedExercises
+                                exercises = exercises
                             )
                             onFinishWorkout(finalLog)
                         },
@@ -96,7 +85,7 @@ fun ActiveWorkoutScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            itemsIndexed(loggedExercises) { exIndex, exercise ->
+            itemsIndexed(exercises) { exIndex, exercise ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -141,12 +130,66 @@ fun ActiveWorkoutScreen(
                                 setIndex = setIndex,
                                 exercise = exercise,
                                 loggedSet = loggedSet,
-                                onUpdate = { newSet -> updateSet(exIndex, setIndex, newSet) }
+                                onUpdate = { newSet -> onUpdateSet(exIndex, setIndex, newSet) } // Salviamo nel ViewModel
                             )
                         }
                     }
                 }
             }
+
+            // TASTO ROSSO: ABBANDONA ALLENAMENTO
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { showAbandonDialog = true },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Abbandona Allenamento", style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+
+        // POPUP 1: TASTO INDIETRO (PAUSA)
+        if (showPauseDialog) {
+            AlertDialog(
+                onDismissRequest = { showPauseDialog = false },
+                title = { Text("Metti in pausa?") },
+                text = { Text("Vuoi uscire dalla schermata? L'allenamento rimarrà in memoria e potrai riprenderlo dalla Home.") },
+                confirmButton = {
+                    Button(onClick = {
+                        showPauseDialog = false
+                        onPauseWorkout()
+                    }) { Text("Metti in Pausa") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPauseDialog = false }) { Text("Rimani qui") }
+                }
+            )
+        }
+
+        // POPUP 2: TASTO ROSSO (ABBANDONA)
+        if (showAbandonDialog) {
+            AlertDialog(
+                onDismissRequest = { showAbandonDialog = false },
+                title = { Text("Abbandona Allenamento") },
+                text = { Text("Sei sicuro? Tutti i dati non salvati andranno persi e l'allenamento non finirà nello storico.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showAbandonDialog = false
+                            onAbandonWorkout()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Abbandona") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAbandonDialog = false }) { Text("Annulla") }
+                }
+            )
         }
     }
 }
@@ -176,17 +219,12 @@ fun WorkoutSetRow(
             }
             if (timeLeft == 0) {
                 isTimerRunning = false
-
-                // LA MAGIA: TONE GENERATOR
                 try {
-                    // Impostiamo il volume al 100% relativo al canale Media (STREAM_MUSIC)
                     val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
-                    // TONE_CDMA_ALERT_CALL_GUARD è un suono molto chiaro e squillante simile a un timer!
-                    toneGen.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 800) // Suona per 800 millisecondi
+                    toneGen.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 800)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-
                 onUpdate(loggedSet.copy(completed = true))
                 timeLeft = loggedSet.timeSeconds
             }

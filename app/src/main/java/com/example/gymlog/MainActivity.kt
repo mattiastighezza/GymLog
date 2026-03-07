@@ -30,16 +30,29 @@ class MainActivity : ComponentActivity() {
 
                     val templates by viewModel.templates.collectAsState()
                     val workoutLogs by viewModel.workoutLogs.collectAsState()
-                    val availableExercises by viewModel.exercises.collectAsState() // Raccogliamo la lista esercizi
+                    val availableExercises by viewModel.exercises.collectAsState()
+
+                    // Raccogliamo lo stato dell'allenamento attivo!
+                    val activeTemplate by viewModel.activeTemplate.collectAsState()
+                    val activeExercises by viewModel.activeExercises.collectAsState()
 
                     NavHost(navController = navController, startDestination = "home") {
 
                         composable("home") {
                             HomeScreen(
                                 templates = templates,
+                                activeWorkoutTemplate = activeTemplate, // Passiamo la scheda in corso
                                 onCreateWorkoutClick = { navController.navigate("create_workout") },
                                 onHistoryClick = { navController.navigate("history") },
-                                onStartWorkoutClick = { template -> navController.navigate("active_workout/${template.id}") },
+                                onStartWorkoutClick = { template ->
+                                    // Avvia nel ViewModel e poi vai alla pagina
+                                    viewModel.startWorkout(template)
+                                    navController.navigate("active_workout")
+                                },
+                                onResumeWorkoutClick = {
+                                    // Riprendi semplicemente tornando alla pagina
+                                    navController.navigate("active_workout")
+                                },
                                 onEditTemplate = { template -> navController.navigate("create_workout?templateId=${template.id}") },
                                 onDeleteTemplate = { template -> viewModel.deleteTemplate(template) }
                             )
@@ -54,9 +67,9 @@ class MainActivity : ComponentActivity() {
 
                             CreateWorkoutScreen(
                                 initialTemplate = templateToEdit,
-                                availableExercises = availableExercises, // Passiamo la libreria
-                                onAddExerciseToDb = { nomeEs -> viewModel.addExerciseToLibrary(nomeEs) }, // Salva nuovo esercizio
-                                onDeleteExerciseFromDb = { es -> viewModel.deleteExerciseFromLibrary(es) }, // Elimina esercizio
+                                availableExercises = availableExercises,
+                                onAddExerciseToDb = { nomeEs -> viewModel.addExerciseToLibrary(nomeEs) },
+                                onDeleteExerciseFromDb = { es -> viewModel.deleteExerciseFromLibrary(es) },
                                 onBackClick = { navController.popBackStack() },
                                 onSaveClick = { workout ->
                                     if (templateToEdit != null) viewModel.updateTemplate(workout)
@@ -66,16 +79,25 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        composable("active_workout/{templateId}") { backStackEntry ->
-                            val templateId = backStackEntry.arguments?.getString("templateId")
-                            val templateDaAvviare = templates.find { it.id == templateId }
-
-                            if (templateDaAvviare != null) {
+                        // L'URL ora è generico, non serve più passargli l'ID perché ci pensa il ViewModel
+                        composable("active_workout") {
+                            if (activeTemplate != null && activeExercises != null) {
                                 ActiveWorkoutScreen(
-                                    template = templateDaAvviare,
-                                    onBackClick = { navController.popBackStack() },
+                                    template = activeTemplate!!,
+                                    exercises = activeExercises!!,
+                                    onUpdateSet = { exIdx, setIdx, newSet ->
+                                        viewModel.updateActiveSet(exIdx, setIdx, newSet)
+                                    },
+                                    onPauseWorkout = {
+                                        navController.popBackStack() // Torna alla home, i dati restano nel ViewModel!
+                                    },
+                                    onAbandonWorkout = {
+                                        viewModel.clearActiveWorkout() // Cancella i dati e torna alla home
+                                        navController.popBackStack()
+                                    },
                                     onFinishWorkout = { workoutLogCompletato ->
                                         viewModel.saveWorkoutLog(workoutLogCompletato)
+                                        viewModel.clearActiveWorkout() // Pulizia
                                         navController.popBackStack()
                                     }
                                 )
