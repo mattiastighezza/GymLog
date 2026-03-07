@@ -203,7 +203,7 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
             ProgressChart(
                 data = chartData,
                 unit = chartUnit,
-                modifier = Modifier.fillMaxWidth().height(300.dp),
+                modifier = Modifier.fillMaxWidth().height(350.dp), // Aumentato leggermente l'altezza totale
                 color = MaterialTheme.colorScheme.primary
             )
         } else {
@@ -216,14 +216,14 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
 fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modifier = Modifier, color: Color) {
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val tipStyle = MaterialTheme.typography.bodySmall.copy(color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
 
     var touchX by remember { mutableStateOf<Float?>(null) }
 
-    Box(modifier = modifier) {
+    Column(modifier = modifier) {
         Canvas(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .weight(1f) // Il grafico occupa tutto lo spazio disponibile sopra il messaggio
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -241,7 +241,7 @@ fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modif
                 }
         ) {
             val paddingLeft = 120f
-            val paddingBottom = 120f
+            val paddingBottom = 60f
             val paddingTop = 140f
             val paddingRight = 80f
 
@@ -253,24 +253,22 @@ fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modif
 
             val axisColor = Color.Gray.copy(alpha=0.5f)
 
+            // Asse Y
             drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft, size.height - paddingBottom), strokeWidth = 2f)
             drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft - 6f, topOfAxis + 10f), strokeWidth = 2f)
             drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft + 6f, topOfAxis + 10f), strokeWidth = 2f)
 
+            // Asse X
             drawLine(axisColor, Offset(paddingLeft, size.height - paddingBottom), Offset(size.width - paddingRight + 10f, size.height - paddingBottom), strokeWidth = 2f)
             drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom - 6f), strokeWidth = 2f)
             drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom + 6f), strokeWidth = 2f)
 
+            // Unità di misura
             val unitLabel = "[$unit]"
             val unitStyle = labelStyle.copy(fontWeight = FontWeight.Bold)
             val unitResult = textMeasurer.measure(unitLabel, unitStyle)
             val unitY = topOfAxis - unitResult.size.height - 10f
-            drawText(
-                textMeasurer,
-                unitLabel,
-                Offset(paddingLeft - unitResult.size.width / 2, unitY),
-                style = unitStyle
-            )
+            drawText(textMeasurer, unitLabel, Offset(paddingLeft - unitResult.size.width / 2, unitY), style = unitStyle)
 
             val rawMax = data.maxOf { it.second }
             val rawMin = data.minOf { it.second }
@@ -293,148 +291,85 @@ fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modif
             val stepY = rangeY / 5f
             val dashedEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
 
+            // Griglia Y
             for (i in 0..5) {
                 val currentYVal = minRounded + (stepY * i)
                 val y = paddingTop + chartHeight - ((currentYVal - minRounded) / rangeY * chartHeight)
 
                 if (i > 0) {
-                    drawLine(
-                        color = Color.Gray.copy(alpha = 0.3f),
-                        start = Offset(paddingLeft, y),
-                        end = Offset(size.width - paddingRight, y),
-                        strokeWidth = 2f,
-                        pathEffect = dashedEffect
-                    )
+                    drawLine(color = Color.Gray.copy(alpha = 0.3f), start = Offset(paddingLeft, y), end = Offset(size.width - paddingRight, y), strokeWidth = 2f, pathEffect = dashedEffect)
                 }
 
-                val text = if (currentYVal % 1f == 0f) {
-                    String.format(Locale.getDefault(), "%.0f", currentYVal)
-                } else {
-                    String.format(Locale.getDefault(), "%.1f", currentYVal)
-                }
+                val text = if (currentYVal % 1f == 0f) String.format(Locale.getDefault(), "%.0f", currentYVal) else String.format(Locale.getDefault(), "%.1f", currentYVal)
                 val measuredText = textMeasurer.measure(text, labelStyle)
                 drawText(textMeasurer, text, Offset(paddingLeft - measuredText.size.width - 16f, y - measuredText.size.height / 2), style = labelStyle)
             }
 
             val stepX = if (data.size > 1) chartWidth / (data.size - 1) else 0f
-            val pointsX = data.indices.map { index ->
-                if (data.size == 1) paddingLeft + chartWidth / 2 else paddingLeft + (index * stepX)
-            }
+            val pointsX = data.indices.map { index -> if (data.size == 1) paddingLeft + chartWidth / 2 else paddingLeft + (index * stepX) }
 
             val path = Path()
-            val xIndicesToShow = mutableSetOf<Int>()
-            xIndicesToShow.add(0)
-            if (data.size <= 6) {
-                xIndicesToShow.addAll(data.indices)
-            } else {
-                for (i in 1..5) {
-                    xIndicesToShow.add(((data.size - 1) * i) / 5)
-                }
-            }
-
             data.forEachIndexed { index, pair ->
                 val x = pointsX[index]
                 val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
-                if (xIndicesToShow.contains(index)) {
-                    if (index > 0 && data.size > 1) {
-                        drawLine(
-                            color = Color.Gray.copy(alpha = 0.3f),
-                            start = Offset(x, paddingTop),
-                            end = Offset(x, size.height - paddingBottom),
-                            strokeWidth = 2f,
-                            pathEffect = dashedEffect
-                        )
-                    }
-
-                    val dateLabel = pair.first.take(5)
-                    val measuredDate = textMeasurer.measure(dateLabel, labelStyle)
-                    drawText(textMeasurer, dateLabel, Offset(x - measuredDate.size.width / 2, size.height - paddingBottom + 16f), style = labelStyle)
-                }
+                // Date sull'asse X
+                val dateLabel = pair.first.take(5)
+                val measuredDate = textMeasurer.measure(dateLabel, labelStyle)
+                drawText(textMeasurer, dateLabel, Offset(x - measuredDate.size.width / 2, size.height - paddingBottom + 16f), style = labelStyle)
 
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 drawCircle(color, radius = 8f, center = Offset(x, y))
             }
 
-            if (data.size > 1) {
-                drawPath(path, color, style = Stroke(width = 6f))
-            }
+            if (data.size > 1) drawPath(path, color, style = Stroke(width = 6f))
 
+            // Tooltip interattivo
             touchX?.let { tx ->
                 var closestIndex = 0
                 var minDiff = Float.MAX_VALUE
                 pointsX.forEachIndexed { index, px ->
                     val diff = kotlin.math.abs(px - tx)
-                    if (diff < minDiff) {
-                        minDiff = diff
-                        closestIndex = index
-                    }
+                    if (diff < minDiff) { minDiff = diff; closestIndex = index }
                 }
 
                 val snappedX = pointsX[closestIndex]
                 val pair = data[closestIndex]
                 val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
-                drawLine(
-                    color = color.copy(alpha = 0.7f),
-                    start = Offset(snappedX, topOfAxis),
-                    end = Offset(snappedX, size.height - paddingBottom),
-                    strokeWidth = 4f,
-                    pathEffect = dashedEffect
-                )
-
+                drawLine(color = color.copy(alpha = 0.7f), start = Offset(snappedX, topOfAxis), end = Offset(snappedX, size.height - paddingBottom), strokeWidth = 4f, pathEffect = dashedEffect)
                 drawCircle(Color.White, radius = 14f, center = Offset(snappedX, y))
                 drawCircle(color, radius = 10f, center = Offset(snappedX, y))
 
-                val valText = if (pair.second % 1f == 0f) {
-                    String.format(Locale.getDefault(), "%.0f", pair.second)
-                } else {
-                    String.format(Locale.getDefault(), "%.1f", pair.second)
-                }
+                val valText = if (pair.second % 1f == 0f) String.format(Locale.getDefault(), "%.0f", pair.second) else String.format(Locale.getDefault(), "%.1f", pair.second)
                 val tooltipText = "$valText $unit\n${pair.first.take(5)}"
-
-                val textLayoutResult = textMeasurer.measure(
-                    text = tooltipText,
-                    style = labelStyle.copy(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                )
+                val textLayoutResult = textMeasurer.measure(text = tooltipText, style = labelStyle.copy(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center))
 
                 val tooltipWidth = textLayoutResult.size.width + 32f
                 val tooltipHeight = textLayoutResult.size.height + 16f
-
                 var tooltipLeft = snappedX - tooltipWidth / 2
                 if (tooltipLeft < paddingLeft) tooltipLeft = paddingLeft
                 if (tooltipLeft + tooltipWidth > size.width - paddingRight) tooltipLeft = size.width - paddingRight - tooltipWidth
 
-                val tooltipTop = y - tooltipHeight - 20f
-                val finalTop = if (tooltipTop < topOfAxis - 20f) y + 24f else tooltipTop
-
-                drawRoundRect(
-                    color = Color.DarkGray.copy(alpha = 0.9f),
-                    topLeft = Offset(tooltipLeft, finalTop),
-                    size = Size(tooltipWidth, tooltipHeight),
-                    cornerRadius = CornerRadius(12f, 12f)
-                )
-
-                drawText(
-                    textLayoutResult,
-                    topLeft = Offset(tooltipLeft + 16f, finalTop + 8f)
-                )
+                val finalTop = if (y - tooltipHeight - 20f < topOfAxis - 20f) y + 24f else y - tooltipHeight - 20f
+                drawRoundRect(color = Color.DarkGray.copy(alpha = 0.9f), topLeft = Offset(tooltipLeft, finalTop), size = Size(tooltipWidth, tooltipHeight), cornerRadius = CornerRadius(12f, 12f))
+                drawText(textLayoutResult, topLeft = Offset(tooltipLeft + 16f, finalTop + 8f))
             }
         }
 
+        // IL MESSAGGIO ORA È UN COMPONENTE ESTERNO AL CANVAS
         if (data.size == 1) {
-            Box(
+            Text(
+                text = "(Fai un altro allenamento per creare la curva)",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.Gray,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                ),
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "(Fai un altro allenamento per creare la curva)",
-                    style = tipStyle,
-                    textAlign = TextAlign.Center
-                )
-            }
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
