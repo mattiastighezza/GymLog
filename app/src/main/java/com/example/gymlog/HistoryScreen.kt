@@ -148,6 +148,8 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
         logs.any { log -> log.exercises.any { it.exerciseName == selectedExercise && it.isTimeBased } }
     }
 
+    val chartUnit = if (showVolume && isSelectedTimeBased) "s" else "kg"
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         ExposedDropdownMenuBox(expanded = expandedDropdown, onExpandedChange = { expandedDropdown = !expandedDropdown }) {
             OutlinedTextField(
@@ -194,7 +196,12 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
         }
 
         if (chartData.isNotEmpty()) {
-            ProgressChart(data = chartData, modifier = Modifier.fillMaxWidth().height(300.dp), color = MaterialTheme.colorScheme.primary)
+            ProgressChart(
+                data = chartData,
+                unit = chartUnit,
+                modifier = Modifier.fillMaxWidth().height(300.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
         } else {
             Box(modifier = Modifier.fillMaxWidth().height(250.dp), contentAlignment = Alignment.Center) { Text("Nessun dato.", color = Color.Gray) }
         }
@@ -202,47 +209,72 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
 }
 
 @Composable
-fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier, color: Color) {
+fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modifier = Modifier, color: Color) {
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val tipStyle = MaterialTheme.typography.bodySmall.copy(color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
 
-    // VARIABILE REATTIVA PER TRACCIARE IL DITO SULLO SCHERMO
     var touchX by remember { mutableStateOf<Float?>(null) }
 
     Canvas(
-        modifier = modifier.pointerInput(Unit) {
-            // IL MOTORE DELL'INTERATTIVITA': Registra quando premi e scorri il dito
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull()
-                    if (change != null) {
-                        if (change.pressed) {
-                            touchX = change.position.x
-                        } else {
-                            touchX = null // Il dito è stato sollevato
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull()
+                        if (change != null) {
+                            if (change.pressed) {
+                                touchX = change.position.x
+                            } else {
+                                touchX = null
+                            }
                         }
                     }
                 }
             }
-        }
     ) {
-        val paddingLeft = 100f
-        val paddingBottom = 80f
-        val paddingTop = 60f // Rialzato per fare spazio al testo per 1 punto
-        val paddingRight = 60f
+        val paddingLeft = 120f
+        val paddingBottom = 120f // SPAZIO AUMENTATO PER IL MESSAGGIO INFERIORE
+        val paddingTop = 140f // SPAZIO AUMENTATO PER L'UNITA' DI MISURA
+        val paddingRight = 80f
+
+        val axisExtension = 40f
+        val topOfAxis = paddingTop - axisExtension
 
         val chartWidth = size.width - paddingLeft - paddingRight
         val chartHeight = size.height - paddingTop - paddingBottom
 
-        // DISEGNO DEGLI ASSI
-        drawLine(Color.Gray.copy(alpha=0.5f), Offset(paddingLeft, paddingTop), Offset(paddingLeft, size.height - paddingBottom), strokeWidth = 2f)
-        drawLine(Color.Gray.copy(alpha=0.5f), Offset(paddingLeft, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom), strokeWidth = 2f)
+        val axisColor = Color.Gray.copy(alpha=0.5f)
+
+        // ==========================================
+        // DISEGNO DEGLI ASSI E DELLE FRECCE
+        // ==========================================
+        drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft, size.height - paddingBottom), strokeWidth = 2f)
+        drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft - 6f, topOfAxis + 10f), strokeWidth = 2f)
+        drawLine(axisColor, Offset(paddingLeft, topOfAxis), Offset(paddingLeft + 6f, topOfAxis + 10f), strokeWidth = 2f)
+
+        drawLine(axisColor, Offset(paddingLeft, size.height - paddingBottom), Offset(size.width - paddingRight + 10f, size.height - paddingBottom), strokeWidth = 2f)
+        drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom - 6f), strokeWidth = 2f)
+        drawLine(axisColor, Offset(size.width - paddingRight + 10f, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom + 6f), strokeWidth = 2f)
+
+        // DISEGNO UNITA' DI MISURA
+        val unitLabel = "[$unit]"
+        val unitStyle = labelStyle.copy(fontWeight = FontWeight.Bold)
+        val unitResult = textMeasurer.measure(unitLabel, unitStyle)
+        // Posizioniamo la scritta assicurandoci che la sua BASE sia sopra la punta della freccia!
+        val unitY = topOfAxis - unitResult.size.height - 10f
+        drawText(
+            textMeasurer,
+            unitLabel,
+            Offset(paddingLeft - unitResult.size.width / 2, unitY),
+            style = unitStyle
+        )
 
         val rawMax = data.maxOf { it.second }
         val rawMin = data.minOf { it.second }
 
-        // CALCOLO SCALA VALORI (anche per un punto solo creiamo un range di 20)
         val minRounded = if (data.size == 1) {
             if (rawMin > 10) (Math.floor(((rawMin - 10) / 10).toDouble()) * 10).toFloat() else 0f
         } else {
@@ -259,10 +291,9 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
 
         val rangeY = maxRounded - minRounded
         val stepY = rangeY / 5f
-
         val dashedEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
 
-        // DISEGNO LINEE ORIZZONTALI (GRIGLIA)
+        // GRIGLIA Y
         for (i in 0..5) {
             val currentYVal = minRounded + (stepY * i)
             val y = paddingTop + chartHeight - ((currentYVal - minRounded) / rangeY * chartHeight)
@@ -282,15 +313,12 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
             drawText(textMeasurer, text, Offset(paddingLeft - measuredText.size.width - 16f, y - measuredText.size.height / 2), style = labelStyle)
         }
 
-        // CALCOLO COORDINATE X DEI PUNTI
         val stepX = if (data.size > 1) chartWidth / (data.size - 1) else 0f
         val pointsX = data.indices.map { index ->
             if (data.size == 1) paddingLeft + chartWidth / 2 else paddingLeft + (index * stepX)
         }
 
         val path = Path()
-
-        // Quali etichette delle date mostrare sotto
         val xIndicesToShow = mutableSetOf<Int>()
         xIndicesToShow.add(0)
         if (data.size <= 6) {
@@ -301,13 +329,12 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
             }
         }
 
-        // DISEGNO CURVA E PUNTI
         data.forEachIndexed { index, pair ->
             val x = pointsX[index]
             val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
             if (xIndicesToShow.contains(index)) {
-                if (index > 0) {
+                if (index > 0 && data.size > 1) {
                     drawLine(
                         color = Color.Gray.copy(alpha = 0.3f),
                         start = Offset(x, paddingTop),
@@ -317,36 +344,37 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
                     )
                 }
 
-                val dateLabel = pair.first.take(5) // Mostra solo "gg/MM"
+                val dateLabel = pair.first.take(5)
                 val measuredDate = textMeasurer.measure(dateLabel, labelStyle)
                 drawText(textMeasurer, dateLabel, Offset(x - measuredDate.size.width / 2, size.height - paddingBottom + 16f), style = labelStyle)
             }
 
             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-
             drawCircle(color, radius = 8f, center = Offset(x, y))
         }
 
-        // Disegna la curva solo se c'è più di un punto
         if (data.size > 1) {
             drawPath(path, color, style = Stroke(width = 6f))
         } else {
-            // Messaggio per un punto solo
+            // ==========================================
+            // MESSAGGIO PER UN SOLO PUNTO
+            // Disegnato sul canvas molto sotto l'asse X!
+            // ==========================================
             val msg = "(Fai un altro allenamento per creare la curva)"
-            val msgResult = textMeasurer.measure(msg, labelStyle)
+            val msgResult = textMeasurer.measure(msg, tipStyle)
             drawText(
                 textMeasurer,
                 msg,
-                Offset(paddingLeft + (chartWidth - msgResult.size.width) / 2, paddingTop - 24f),
-                style = labelStyle
+                // x = centrato nello schermo, y = in fondo al canvas
+                Offset((size.width - msgResult.size.width) / 2, size.height - 40f),
+                style = tipStyle
             )
         }
 
         // ==========================================
-        // DISEGNO DEL CURSORE MAGNETICO INTERATTIVO
+        // TOOLTIP INTERATTIVO
         // ==========================================
         touchX?.let { tx ->
-            // Trova l'indice del punto più vicino al dito
             var closestIndex = 0
             var minDiff = Float.MAX_VALUE
             pointsX.forEachIndexed { index, px ->
@@ -361,22 +389,19 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
             val pair = data[closestIndex]
             val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
-            // Disegna la linea tratteggiata che segue il cursore
             drawLine(
                 color = color.copy(alpha = 0.7f),
-                start = Offset(snappedX, paddingTop),
+                start = Offset(snappedX, topOfAxis),
                 end = Offset(snappedX, size.height - paddingBottom),
                 strokeWidth = 4f,
                 pathEffect = dashedEffect
             )
 
-            // Pallino bianco e colorato per evidenziare l'aggancio
             drawCircle(Color.White, radius = 14f, center = Offset(snappedX, y))
             drawCircle(color, radius = 10f, center = Offset(snappedX, y))
 
-            // Costruiamo il rettangolo del Tooltip
             val valText = if (pair.second % 1f == 0f) String.format("%.0f", pair.second) else String.format("%.1f", pair.second)
-            val tooltipText = "$valText\n${pair.first.take(5)}"
+            val tooltipText = "$valText $unit\n${pair.first.take(5)}"
 
             val textLayoutResult = textMeasurer.measure(
                 text = tooltipText,
@@ -386,16 +411,13 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
             val tooltipWidth = textLayoutResult.size.width + 32f
             val tooltipHeight = textLayoutResult.size.height + 16f
 
-            // Facciamo in modo che il tooltip non esca mai fuori dallo schermo!
             var tooltipLeft = snappedX - tooltipWidth / 2
             if (tooltipLeft < paddingLeft) tooltipLeft = paddingLeft
             if (tooltipLeft + tooltipWidth > size.width - paddingRight) tooltipLeft = size.width - paddingRight - tooltipWidth
 
-            // Posizioniamo il tooltip sopra al pallino, o sotto se sbatte in alto
             val tooltipTop = y - tooltipHeight - 20f
-            val finalTop = if (tooltipTop < 0f) y + 24f else tooltipTop
+            val finalTop = if (tooltipTop < topOfAxis) y + 24f else tooltipTop
 
-            // Sfondo scuro del tooltip
             drawRoundRect(
                 color = Color.DarkGray.copy(alpha = 0.9f),
                 topLeft = Offset(tooltipLeft, finalTop),
@@ -403,7 +425,6 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
                 cornerRadius = CornerRadius(12f, 12f)
             )
 
-            // Testo del tooltip
             drawText(
                 textLayoutResult,
                 topLeft = Offset(tooltipLeft + 16f, finalTop + 8f)
