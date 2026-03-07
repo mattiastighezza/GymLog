@@ -13,9 +13,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 @Composable
 fun HomeScreen(
@@ -30,20 +33,47 @@ fun HomeScreen(
 ) {
     var templateToDelete by remember { mutableStateOf<WorkoutTemplate?>(null) }
 
+    // ==========================================
+    // SISTEMA ANTI-SFARFALLIO (FREEZE DELLA UI)
+    // ==========================================
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isNavigating by remember { mutableStateOf(false) }
+    var frozenTemplate by remember { mutableStateOf<WorkoutTemplate?>(null) }
+
+    // Questo pezzo rileva quando torni sulla Home (es. se metti in pausa o abbandoni)
+    // e sblocca nuovamente la UI per aggiornare il banner.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isNavigating = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Se stiamo cambiando pagina, usa la "fotografia" vecchia. Altrimenti usa i dati in tempo reale.
+    val displayTemplate = if (isNavigating) frozenTemplate else activeWorkoutTemplate
+    // ==========================================
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .systemBarsPadding() // <-- LA MAGIA CHE RISOLVE L'OVERLAP SULLA FOTOCAMERA!
+            .systemBarsPadding()
             .padding(horizontal = 16.dp)
     ) {
         Spacer(modifier = Modifier.height(16.dp))
         Text("GymLog", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // BANNER ALLENAMENTO IN CORSO
-        if (activeWorkoutTemplate != null) {
+        // Usiamo 'displayTemplate' al posto di 'activeWorkoutTemplate'
+        if (displayTemplate != null) {
             Card(
-                onClick = onResumeWorkoutClick,
+                onClick = {
+                    frozenTemplate = activeWorkoutTemplate
+                    isNavigating = true
+                    onResumeWorkoutClick()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
@@ -54,7 +84,7 @@ fun HomeScreen(
                 ) {
                     Column {
                         Text("Allenamento in corso", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text(activeWorkoutTemplate.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(displayTemplate.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     Icon(Icons.Default.PlayArrow, contentDescription = "Riprendi", tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
@@ -90,7 +120,13 @@ fun HomeScreen(
                             }
 
                             Row {
-                                IconButton(onClick = { onStartWorkoutClick(template) }) { Icon(Icons.Default.PlayArrow, "Avvia", tint = MaterialTheme.colorScheme.primary) }
+                                IconButton(onClick = {
+                                    // LA MAGIA: Prima di avviare, scattiamo la foto e ghiacciamo la UI!
+                                    frozenTemplate = activeWorkoutTemplate
+                                    isNavigating = true
+                                    onStartWorkoutClick(template)
+                                }) { Icon(Icons.Default.PlayArrow, "Avvia", tint = MaterialTheme.colorScheme.primary) }
+
                                 IconButton(onClick = { onEditTemplate(template) }) { Icon(Icons.Default.Edit, "Modifica", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                                 IconButton(onClick = { templateToDelete = template }) { Icon(Icons.Default.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) }
                             }
