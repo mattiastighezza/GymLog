@@ -1,4 +1,7 @@
 package com.example.gymlog
+
+import android.media.AudioManager
+import android.media.ToneGenerator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,16 +10,20 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -32,12 +39,12 @@ fun ActiveWorkoutScreen(
             LoggedExercise(
                 exerciseName = config.exerciseName,
                 note = config.note,
-                isTimeBased = config.isTimeBased, // Recuperiamo la flag!
+                isTimeBased = config.isTimeBased,
                 sets = List(config.sets) {
                     LoggedSet(
                         weight = 0.0,
                         reps = config.reps,
-                        timeSeconds = config.timeSeconds, // Recuperiamo i secondi bersaglio
+                        timeSeconds = config.timeSeconds,
                         completed = false
                     )
                 }
@@ -114,87 +121,163 @@ fun ActiveWorkoutScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // TABELLA INTESTATATA DINAMICAMENTE
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Set", modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                            Text("Set", modifier = Modifier.weight(0.4f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                             Text("kg", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
 
                             if (exercise.isTimeBased) {
-                                Text("Tempo (s)", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                                Text("Tempo (s)", modifier = Modifier.weight(1.2f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                             } else {
-                                Text("Reps", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                                Text("Reps", modifier = Modifier.weight(1.2f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                             }
 
-                            Text("Fatto", modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                            Text("Fatto", modifier = Modifier.weight(0.4f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
                         exercise.sets.forEachIndexed { setIndex, loggedSet ->
-                            val bgColor = if (loggedSet.completed) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(bgColor, shape = MaterialTheme.shapes.small)
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("${setIndex + 1}", modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center)
-
-                                OutlinedTextField(
-                                    value = if (loggedSet.weight == 0.0) "" else loggedSet.weight.toString(),
-                                    onValueChange = { newValue ->
-                                        val weight = newValue.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                        updateSet(exIndex, setIndex, loggedSet.copy(weight = weight))
-                                    },
-                                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(50.dp),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
-                                )
-
-                                // INPUT CAMBIA A SECONDA DEL TIPO
-                                if (exercise.isTimeBased) {
-                                    OutlinedTextField(
-                                        value = loggedSet.timeSeconds.toString(),
-                                        onValueChange = { newValue ->
-                                            val sec = newValue.toIntOrNull() ?: 0
-                                            updateSet(exIndex, setIndex, loggedSet.copy(timeSeconds = sec))
-                                        },
-                                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(50.dp),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
-                                    )
-                                } else {
-                                    OutlinedTextField(
-                                        value = loggedSet.reps.toString(),
-                                        onValueChange = { newValue ->
-                                            val reps = newValue.toIntOrNull() ?: 0
-                                            updateSet(exIndex, setIndex, loggedSet.copy(reps = reps))
-                                        },
-                                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(50.dp),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
-                                    )
-                                }
-
-                                Box(modifier = Modifier.weight(0.5f), contentAlignment = Alignment.Center) {
-                                    IconButton(
-                                        onClick = {
-                                            updateSet(exIndex, setIndex, loggedSet.copy(completed = !loggedSet.completed))
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Completato",
-                                            tint = if (loggedSet.completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                        )
-                                    }
-                                }
-                            }
+                            WorkoutSetRow(
+                                setIndex = setIndex,
+                                exercise = exercise,
+                                loggedSet = loggedSet,
+                                onUpdate = { newSet -> updateSet(exIndex, setIndex, newSet) }
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun WorkoutSetRow(
+    setIndex: Int,
+    exercise: LoggedExercise,
+    loggedSet: LoggedSet,
+    onUpdate: (LoggedSet) -> Unit
+) {
+    val context = LocalContext.current
+    var isTimerRunning by remember { mutableStateOf(false) }
+    var timeLeft by remember { mutableStateOf(loggedSet.timeSeconds) }
+
+    LaunchedEffect(loggedSet.timeSeconds) {
+        if (!isTimerRunning) {
+            timeLeft = loggedSet.timeSeconds
+        }
+    }
+
+    LaunchedEffect(isTimerRunning) {
+        if (isTimerRunning) {
+            while (timeLeft > 0) {
+                delay(1000L)
+                timeLeft--
+            }
+            if (timeLeft == 0) {
+                isTimerRunning = false
+
+                // LA MAGIA: TONE GENERATOR
+                try {
+                    // Impostiamo il volume al 100% relativo al canale Media (STREAM_MUSIC)
+                    val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+                    // TONE_CDMA_ALERT_CALL_GUARD è un suono molto chiaro e squillante simile a un timer!
+                    toneGen.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 800) // Suona per 800 millisecondi
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                onUpdate(loggedSet.copy(completed = true))
+                timeLeft = loggedSet.timeSeconds
+            }
+        }
+    }
+
+    val bgColor = if (loggedSet.completed) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bgColor, shape = MaterialTheme.shapes.small)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("${setIndex + 1}", modifier = Modifier.weight(0.4f), textAlign = TextAlign.Center)
+
+        OutlinedTextField(
+            value = if (loggedSet.weight == 0.0) "" else loggedSet.weight.toString(),
+            onValueChange = { newValue ->
+                val weight = newValue.replace(",", ".").toDoubleOrNull() ?: 0.0
+                onUpdate(loggedSet.copy(weight = weight))
+            },
+            modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(50.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+            singleLine = true
+        )
+
+        if (exercise.isTimeBased) {
+            Row(modifier = Modifier.weight(1.2f).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = if (isTimerRunning) timeLeft.toString() else if (loggedSet.timeSeconds == 0) "" else loggedSet.timeSeconds.toString(),
+                    onValueChange = { newValue ->
+                        if (!isTimerRunning) {
+                            val sec = newValue.toIntOrNull() ?: 0
+                            onUpdate(loggedSet.copy(timeSeconds = sec))
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+                    singleLine = true,
+                    readOnly = isTimerRunning
+                )
+                IconButton(
+                    onClick = {
+                        if (isTimerRunning) {
+                            isTimerRunning = false
+                            timeLeft = loggedSet.timeSeconds
+                        } else {
+                            if (loggedSet.timeSeconds > 0) {
+                                timeLeft = loggedSet.timeSeconds
+                                isTimerRunning = true
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isTimerRunning) Icons.Default.Close else Icons.Default.PlayArrow,
+                        contentDescription = "Timer",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        } else {
+            OutlinedTextField(
+                value = if (loggedSet.reps == 0) "" else loggedSet.reps.toString(),
+                onValueChange = { newValue ->
+                    val reps = newValue.toIntOrNull() ?: 0
+                    onUpdate(loggedSet.copy(reps = reps))
+                },
+                modifier = Modifier.weight(1.2f).padding(horizontal = 4.dp).height(50.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+                singleLine = true
+            )
+        }
+
+        Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.Center) {
+            IconButton(
+                onClick = {
+                    onUpdate(loggedSet.copy(completed = !loggedSet.completed))
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Completato",
+                    tint = if (loggedSet.completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                )
             }
         }
     }
