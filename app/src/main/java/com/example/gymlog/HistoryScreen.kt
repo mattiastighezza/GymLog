@@ -108,7 +108,6 @@ fun WorkoutLogsTab(logs: List<WorkoutLog>, onDeleteClick: (WorkoutLog) -> Unit) 
                                     if (set.completed) {
                                         Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text("Serie ${i + 1}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            // MOSTRIAMO IL TESTO CORRETTO NELLO STORICO ESPANSO
                                             if (exercise.isTimeBased) {
                                                 Text("${set.weight} kg  x  ${set.timeSeconds} sec", fontWeight = FontWeight.Medium)
                                             } else {
@@ -141,6 +140,10 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
     var showVolume by remember { mutableStateOf(false) }
     var expandedDropdown by remember { mutableStateOf(false) }
 
+    val isSelectedTimeBased = remember(selectedExercise, logs) {
+        logs.any { log -> log.exercises.any { it.exerciseName == selectedExercise && it.isTimeBased } }
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         ExposedDropdownMenuBox(expanded = expandedDropdown, onExpandedChange = { expandedDropdown = !expandedDropdown }) {
             OutlinedTextField(
@@ -158,10 +161,11 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
         Spacer(modifier = Modifier.height(16.dp))
         Row(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { showVolume = false }, modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColors(contentColor = if (!showVolume) MaterialTheme.colorScheme.primary else Color.Gray)) {
-                Text("Peso (kg)", fontWeight = if (!showVolume) FontWeight.Bold else FontWeight.Normal)
+                Text("Peso Max (kg)", fontWeight = if (!showVolume) FontWeight.Bold else FontWeight.Normal)
             }
             TextButton(onClick = { showVolume = true }, modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColors(contentColor = if (showVolume) MaterialTheme.colorScheme.primary else Color.Gray)) {
-                Text("Volume", fontWeight = if (showVolume) FontWeight.Bold else FontWeight.Normal)
+                // Testo più esplicativo per il tempo!
+                Text(if (isSelectedTimeBased) "Tempo Tot. (s)" else "Volume", fontWeight = if (showVolume) FontWeight.Bold else FontWeight.Normal)
             }
         }
 
@@ -171,14 +175,19 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
             val exercise = log.exercises.find { it.exerciseName == selectedExercise }
             if (exercise != null) {
                 val value = if (showVolume) {
-                    // CALCOLO DEL VOLUME: se è a tempo moltiplica per i secondi (es. plank con sovraccarico), altrimenti per le reps
-                    val vol = exercise.sets.filter { it.completed }.sumOf {
-                        it.weight * if (exercise.isTimeBased) it.timeSeconds else it.reps
-                    }.toFloat()
-                    if (vol > 0) vol else null
+                    if (exercise.isTimeBased) {
+                        // GRAFICO TEMPO: ORA FA LA SOMMA (es. 30 + 20 + 5 = 55s totali)
+                        val totalSec = exercise.sets.filter { it.completed }.sumOf { it.timeSeconds }.toFloat()
+                        if (totalSec > 0) totalSec else null
+                    } else {
+                        // GRAFICO VOLUME
+                        val vol = exercise.sets.filter { it.completed }.sumOf { it.weight * it.reps }.toFloat()
+                        if (vol > 0) vol else null
+                    }
                 } else {
+                    // GRAFICO PESO
                     val maxW = exercise.sets.filter { it.completed }.maxOfOrNull { it.weight }?.toFloat()
-                    if (maxW != null && maxW > 0) maxW else null
+                    if (maxW != null) maxW else null
                 }
                 if (value != null) Pair(log.date, value) else null
             } else null
@@ -196,7 +205,8 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
 fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier, color: Color) {
     if (data.size < 2) {
         Box(modifier, contentAlignment = Alignment.Center) {
-            Text("Valore: ${data.first().second}", style = MaterialTheme.typography.titleLarge, color = color)
+            val textValue = if (data.first().second % 1f == 0f) String.format("%.0f", data.first().second) else data.first().second.toString()
+            Text("Valore: $textValue", style = MaterialTheme.typography.titleLarge, color = color)
             Text("\n\n(Fai un altro allenamento per creare la curva)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         }
         return
