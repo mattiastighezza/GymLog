@@ -21,7 +21,6 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
     private val _exercises = MutableStateFlow<List<Exercise>>(emptyList())
     val exercises: StateFlow<List<Exercise>> = _exercises
 
-    // NUOVE VARIABILI PER L'ALLENAMENTO IN PAUSA/IN CORSO
     private val _activeTemplate = MutableStateFlow<WorkoutTemplate?>(null)
     val activeTemplate: StateFlow<WorkoutTemplate?> = _activeTemplate
 
@@ -118,19 +117,33 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ==========================================================
-    // FUNZIONI PER L'ALLENAMENTO ATTIVO / PAUSA
+    // FUNZIONI PER L'ALLENAMENTO ATTIVO
     // ==========================================================
 
     fun startWorkout(template: WorkoutTemplate) {
-        // Se stiamo riavviando lo stesso allenamento già in corso, non resettiamo i dati!
         if (_activeTemplate.value?.id == template.id && _activeExercises.value != null) return
 
         _activeTemplate.value = template
         _activeExercises.value = template.exercises.map { config ->
+
+            // MAGIA: Cerca l'ultimo peso usato scorrendo lo storico al contrario (dal più recente)
+            var foundLastWeight: Double? = null
+            for (log in _workoutLogs.value.reversed()) {
+                val pastEx = log.exercises.find { it.exerciseName == config.exerciseName }
+                if (pastEx != null) {
+                    val maxW = pastEx.sets.filter { it.completed }.maxOfOrNull { it.weight }
+                    if (maxW != null && maxW > 0) {
+                        foundLastWeight = maxW
+                        break // Trovato! Smettiamo di cercare.
+                    }
+                }
+            }
+
             LoggedExercise(
                 exerciseName = config.exerciseName,
                 note = config.note,
                 isTimeBased = config.isTimeBased,
+                lastWeight = foundLastWeight, // Impostiamo il peso trovato
                 sets = List(config.sets) {
                     LoggedSet(weight = 0.0, reps = config.reps, timeSeconds = config.timeSeconds, completed = false)
                 }
@@ -143,6 +156,47 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
         val newSets = currentList[exIndex].sets.toMutableList()
         newSets[setIndex] = newSet
         currentList[exIndex] = currentList[exIndex].copy(sets = newSets)
+        _activeExercises.value = currentList
+    }
+
+    // NUOVO: Aggiunge una serie extra
+    fun addSetToActiveExercise(exIndex: Int) {
+        val currentList = _activeExercises.value?.toMutableList() ?: return
+        val exercise = currentList[exIndex]
+        val newSets = exercise.sets.toMutableList()
+
+        // Copiamo i target dall'ultima serie (se esiste) per comodità
+        val lastSet = newSets.lastOrNull()
+        newSets.add(
+            LoggedSet(
+                weight = 0.0,
+                reps = lastSet?.reps ?: 0,
+                timeSeconds = lastSet?.timeSeconds ?: 0,
+                completed = false
+            )
+        )
+
+        currentList[exIndex] = exercise.copy(sets = newSets)
+        _activeExercises.value = currentList
+    }
+
+    // NUOVO: Sposta in alto
+    fun moveActiveExerciseUp(index: Int) {
+        val currentList = _activeExercises.value?.toMutableList() ?: return
+        if (index <= 0) return
+        val temp = currentList[index]
+        currentList[index] = currentList[index - 1]
+        currentList[index - 1] = temp
+        _activeExercises.value = currentList
+    }
+
+    // NUOVO: Sposta in basso
+    fun moveActiveExerciseDown(index: Int) {
+        val currentList = _activeExercises.value?.toMutableList() ?: return
+        if (index >= currentList.size - 1) return
+        val temp = currentList[index]
+        currentList[index] = currentList[index + 1]
+        currentList[index + 1] = temp
         _activeExercises.value = currentList
     }
 

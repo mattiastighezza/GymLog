@@ -9,10 +9,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,17 +36,18 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun ActiveWorkoutScreen(
     template: WorkoutTemplate,
-    exercises: List<LoggedExercise>, // Riceviamo la lista in tempo reale dal ViewModel
-    onUpdateSet: (Int, Int, LoggedSet) -> Unit, // Diciamo al ViewModel di aggiornarsi
+    exercises: List<LoggedExercise>,
+    onUpdateSet: (Int, Int, LoggedSet) -> Unit,
+    onAddSet: (Int) -> Unit, // NUOVO EVENTO
+    onMoveUp: (Int) -> Unit, // NUOVO EVENTO
+    onMoveDown: (Int) -> Unit, // NUOVO EVENTO
     onPauseWorkout: () -> Unit,
     onAbandonWorkout: () -> Unit,
     onFinishWorkout: (WorkoutLog) -> Unit
 ) {
-    // Variabili per i due Popup
     var showPauseDialog by remember { mutableStateOf(false) }
     var showAbandonDialog by remember { mutableStateOf(false) }
 
-    // MAGIA: Intercetta il tasto fisico indietro di Android!
     BackHandler {
         showPauseDialog = true
     }
@@ -53,7 +57,6 @@ fun ActiveWorkoutScreen(
             TopAppBar(
                 title = { Text(template.name) },
                 navigationIcon = {
-                    // Anche la freccia in alto a sinistra apre il popup
                     IconButton(onClick = { showPauseDialog = true }) { Icon(Icons.Default.ArrowBack, "Indietro") }
                 },
                 actions = {
@@ -91,12 +94,46 @@ fun ActiveWorkoutScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = exercise.exerciseName,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+
+                        // INTESTAZIONE ESERCIZIO E BOTTONI RIORDINA
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${exIndex + 1}. ${exercise.exerciseName}",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                // MOSTRA ULTIMO PESO SE DISPONIBILE
+                                if (exercise.lastWeight != null) {
+                                    Text(
+                                        text = "Ultimo peso: ${if (exercise.lastWeight!! % 1.0 == 0.0) String.format("%.0f", exercise.lastWeight) else exercise.lastWeight} kg",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+
+                            // FRECCE PER RIORDINARE
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (exIndex > 0) {
+                                    IconButton(
+                                        onClick = { onMoveUp(exIndex) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) { Icon(Icons.Default.KeyboardArrowUp, "Su", tint = MaterialTheme.colorScheme.primary) }
+                                }
+                                if (exIndex < exercises.size - 1) {
+                                    IconButton(
+                                        onClick = { onMoveDown(exIndex) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) { Icon(Icons.Default.KeyboardArrowDown, "Giù", tint = MaterialTheme.colorScheme.primary) }
+                                }
+                            }
+                        }
 
                         if (exercise.note.isNotBlank()) {
                             Text(
@@ -130,14 +167,24 @@ fun ActiveWorkoutScreen(
                                 setIndex = setIndex,
                                 exercise = exercise,
                                 loggedSet = loggedSet,
-                                onUpdate = { newSet -> onUpdateSet(exIndex, setIndex, newSet) } // Salviamo nel ViewModel
+                                onUpdate = { newSet -> onUpdateSet(exIndex, setIndex, newSet) }
                             )
+                        }
+
+                        // PULSANTE AGGIUNGI SERIE
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = { onAddSet(exIndex) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Aggiungi Serie")
                         }
                     }
                 }
             }
 
-            // TASTO ROSSO: ABBANDONA ALLENAMENTO
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
@@ -153,7 +200,6 @@ fun ActiveWorkoutScreen(
             }
         }
 
-        // POPUP 1: TASTO INDIETRO (PAUSA)
         if (showPauseDialog) {
             AlertDialog(
                 onDismissRequest = { showPauseDialog = false },
@@ -165,13 +211,10 @@ fun ActiveWorkoutScreen(
                         onPauseWorkout()
                     }) { Text("Metti in Pausa") }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showPauseDialog = false }) { Text("Rimani qui") }
-                }
+                dismissButton = { TextButton(onClick = { showPauseDialog = false }) { Text("Rimani qui") } }
             )
         }
 
-        // POPUP 2: TASTO ROSSO (ABBANDONA)
         if (showAbandonDialog) {
             AlertDialog(
                 onDismissRequest = { showAbandonDialog = false },
@@ -186,9 +229,7 @@ fun ActiveWorkoutScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) { Text("Abbandona") }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showAbandonDialog = false }) { Text("Annulla") }
-                }
+                dismissButton = { TextButton(onClick = { showAbandonDialog = false }) { Text("Annulla") } }
             )
         }
     }
@@ -243,7 +284,7 @@ fun WorkoutSetRow(
         Text("${setIndex + 1}", modifier = Modifier.weight(0.4f), textAlign = TextAlign.Center)
 
         OutlinedTextField(
-            value = if (loggedSet.weight == 0.0) "" else loggedSet.weight.toString(),
+            value = if (loggedSet.weight == 0.0) "" else if (loggedSet.weight % 1.0 == 0.0) String.format("%.0f", loggedSet.weight) else loggedSet.weight.toString(),
             onValueChange = { newValue ->
                 val weight = newValue.replace(",", ".").toDoubleOrNull() ?: 0.0
                 onUpdate(loggedSet.copy(weight = weight))

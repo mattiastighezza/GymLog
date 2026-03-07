@@ -13,7 +13,6 @@ data class ExerciseConfig(
     var reps: Int,
     var restSeconds: Int,
     var note: String = "",
-    // NUOVI CAMPI PER GLI ESERCIZI A TEMPO
     var isTimeBased: Boolean = false,
     var timeSeconds: Int = 0
 )
@@ -21,15 +20,16 @@ data class ExerciseConfig(
 data class LoggedSet(
     var weight: Double = 0.0,
     var reps: Int = 0,
-    var timeSeconds: Int = 0, // Nuovo campo per lo storico
+    var timeSeconds: Int = 0,
     var completed: Boolean = false
 )
 
 data class LoggedExercise(
     val exerciseName: String,
     var note: String = "",
-    var isTimeBased: Boolean = false, // Ricordiamo se era a tempo
-    var sets: List<LoggedSet>
+    var isTimeBased: Boolean = false,
+    var sets: List<LoggedSet>,
+    var lastWeight: Double? = null // NUOVO: Ricorda l'ultimo peso usato!
 )
 
 data class WorkoutLog(
