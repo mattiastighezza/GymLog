@@ -20,17 +20,23 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun HomeScreen(
     templates: List<WorkoutTemplate>,
-    activeWorkoutTemplate: WorkoutTemplate?, // Sapere se c'è un allenamento in corso
+    activeWorkoutTemplate: WorkoutTemplate?,
     onCreateWorkoutClick: () -> Unit,
     onHistoryClick: () -> Unit,
     onStartWorkoutClick: (WorkoutTemplate) -> Unit,
-    onResumeWorkoutClick: () -> Unit, // Riprendere allenamento
+    onResumeWorkoutClick: () -> Unit,
     onEditTemplate: (WorkoutTemplate) -> Unit,
     onDeleteTemplate: (WorkoutTemplate) -> Unit
 ) {
     var templateToDelete by remember { mutableStateOf<WorkoutTemplate?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .systemBarsPadding() // <-- LA MAGIA CHE RISOLVE L'OVERLAP SULLA FOTOCAMERA!
+            .padding(horizontal = 16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
         Text("GymLog", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 

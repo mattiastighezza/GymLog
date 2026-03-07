@@ -18,15 +18,14 @@ import androidx.core.view.WindowCompat
 
 // SCHEMA COLORI CHIARO
 private val LightColorScheme = lightColorScheme(
-    primary = BrandDarkBlue, // Colore principale (Barre, Bottoni ok)
-    onPrimary = Color.White, // Testo sopra il colore primario
+    primary = BrandDarkBlue,
+    onPrimary = Color.White,
 
-    secondary = BrandForestGreen, // Colore secondario (Tasto Storico)
+    secondary = BrandForestGreen,
     onSecondary = Color.White,
 
-    tertiary = BrandLimeGreen, // Colore terziario per dettagli
+    tertiary = BrandLimeGreen,
 
-    // Il colore di sfondo della riga quando completi una serie! Usiamo il tuo Lime ma leggermente trasparente
     primaryContainer = BrandLimeGreen.copy(alpha = 0.25f),
     onPrimaryContainer = BrandDarkBlue,
 
@@ -39,9 +38,9 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = Color.DarkGray
 )
 
-// SCHEMA COLORI SCURO (Per chi usa il telefono in Dark Mode)
+// SCHEMA COLORI SCURO
 private val DarkColorScheme = darkColorScheme(
-    primary = BrandLimeGreen, // Al buio, il lime "spara" e si legge meglio
+    primary = BrandLimeGreen,
     onPrimary = BrandDarkBlue,
 
     secondary = BrandForestGreen,
@@ -64,7 +63,6 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun GymLogTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // IMPORTANTE: Messo su FALSE così Android non ti ruba i colori dal wallpaper!
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -81,14 +79,18 @@ fun GymLogTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+
+            // 1. Colore di sfondo della barra uguale allo sfondo generale dell'app
+            window.statusBarColor = colorScheme.background.toArgb()
+
+            // 2. MAGIA DELLE ICONE: usa icone scure (!darkTheme) se siamo in modalità chiara!
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography, // Assicurati di non cancellare il file Type.kt che gestisce questo!
+        typography = Typography,
         content = content
     )
 }
