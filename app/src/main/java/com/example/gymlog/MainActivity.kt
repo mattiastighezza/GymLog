@@ -22,18 +22,14 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-
-        // 1. Variabile per dire ad Android di aspettare prima di chiudere la Splash Screen
         var keepSplash = true
         val splashScreen = installSplashScreen()
         splashScreen.setKeepOnScreenCondition { keepSplash }
-
         super.onCreate(savedInstanceState)
 
-        // 2. Facciamo durare la Splash Screen per 1.5 secondi
         lifecycleScope.launch {
-            delay(1500L) // 1500 millisecondi
-            keepSplash = false // Rilascia la Splash Screen!
+            delay(1500L)
+            keepSplash = false
         }
 
         setContent {
@@ -66,7 +62,10 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onResumeWorkoutClick = { navController.navigate("active_workout") },
                                 onEditTemplate = { template -> navController.navigate("create_workout?templateId=${template.id}") },
-                                onDeleteTemplate = { template -> viewModel.deleteTemplate(template) }
+                                onDeleteTemplate = { template -> viewModel.deleteTemplate(template) },
+                                // ORA LA HOME GESTISCE ENTRAMBE LE ESPORTAZIONI
+                                onExportTemplates = { viewModel.getTemplatesCsvContent() },
+                                onExportHistory = { viewModel.getHistoryCsvContent() }
                             )
                         }
 
@@ -115,6 +114,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("history") {
+                            // LA HISTORY TORNA PULITA COME PRIMA
                             HistoryScreen(
                                 logs = workoutLogs,
                                 onBackClick = { navController.popBackStack() },

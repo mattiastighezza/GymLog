@@ -159,7 +159,6 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
                 readOnly = true,
                 label = { Text("Seleziona Esercizio") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
-                // RISOLTO IL WARNING menuAnchor: aggiunto il parametro type
                 modifier = Modifier.fillMaxWidth().menuAnchor(type = MenuAnchorType.PrimaryNotEditable)
             )
             ExposedDropdownMenu(expanded = expandedDropdown, onDismissRequest = { expandedDropdown = false }) {
@@ -308,7 +307,6 @@ fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modif
                     )
                 }
 
-                // RISOLTO IL WARNING String.format: aggiunto Locale.getDefault()
                 val text = if (currentYVal % 1f == 0f) {
                     String.format(Locale.getDefault(), "%.0f", currentYVal)
                 } else {
@@ -388,7 +386,6 @@ fun ProgressChart(data: List<Pair<String, Float>>, unit: String, modifier: Modif
                 drawCircle(Color.White, radius = 14f, center = Offset(snappedX, y))
                 drawCircle(color, radius = 10f, center = Offset(snappedX, y))
 
-                // RISOLTO IL WARNING String.format: aggiunto Locale.getDefault()
                 val valText = if (pair.second % 1f == 0f) {
                     String.format(Locale.getDefault(), "%.0f", pair.second)
                 } else {

@@ -7,6 +7,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.Locale
 
 class GymViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("GymLogPrefs", Context.MODE_PRIVATE)
@@ -116,17 +117,11 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putString("exercises", gson.toJson(currentList)).apply()
     }
 
-    // ==========================================================
-    // FUNZIONI PER L'ALLENAMENTO ATTIVO
-    // ==========================================================
-
     fun startWorkout(template: WorkoutTemplate) {
         if (_activeTemplate.value?.id == template.id && _activeExercises.value != null) return
 
         _activeTemplate.value = template
         _activeExercises.value = template.exercises.map { config ->
-
-            // MAGIA: Cerca l'ultimo peso usato scorrendo lo storico al contrario (dal più recente)
             var foundLastWeight: Double? = null
             for (log in _workoutLogs.value.reversed()) {
                 val pastEx = log.exercises.find { it.exerciseName == config.exerciseName }
@@ -134,7 +129,7 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
                     val maxW = pastEx.sets.filter { it.completed }.maxOfOrNull { it.weight }
                     if (maxW != null && maxW > 0) {
                         foundLastWeight = maxW
-                        break // Trovato! Smettiamo di cercare.
+                        break
                     }
                 }
             }
@@ -143,7 +138,7 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
                 exerciseName = config.exerciseName,
                 note = config.note,
                 isTimeBased = config.isTimeBased,
-                lastWeight = foundLastWeight, // Impostiamo il peso trovato
+                lastWeight = foundLastWeight,
                 sets = List(config.sets) {
                     LoggedSet(weight = 0.0, reps = config.reps, timeSeconds = config.timeSeconds, completed = false)
                 }
@@ -159,13 +154,11 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
         _activeExercises.value = currentList
     }
 
-    // NUOVO: Aggiunge una serie extra
     fun addSetToActiveExercise(exIndex: Int) {
         val currentList = _activeExercises.value?.toMutableList() ?: return
         val exercise = currentList[exIndex]
         val newSets = exercise.sets.toMutableList()
 
-        // Copiamo i target dall'ultima serie (se esiste) per comodità
         val lastSet = newSets.lastOrNull()
         newSets.add(
             LoggedSet(
@@ -180,7 +173,6 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
         _activeExercises.value = currentList
     }
 
-    // NUOVO: Sposta in alto
     fun moveActiveExerciseUp(index: Int) {
         val currentList = _activeExercises.value?.toMutableList() ?: return
         if (index <= 0) return
@@ -190,7 +182,6 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
         _activeExercises.value = currentList
     }
 
-    // NUOVO: Sposta in basso
     fun moveActiveExerciseDown(index: Int) {
         val currentList = _activeExercises.value?.toMutableList() ?: return
         if (index >= currentList.size - 1) return
@@ -203,5 +194,51 @@ class GymViewModel(application: Application) : AndroidViewModel(application) {
     fun clearActiveWorkout() {
         _activeTemplate.value = null
         _activeExercises.value = null
+    }
+
+    // ==========================================================
+    // ESPORTAZIONE DATI IN FORMATO CSV (Excel)
+    // ==========================================================
+
+    fun getHistoryCsvContent(): String {
+        val builder = StringBuilder()
+        // Intestazione con separatore punto e virgola
+        builder.append("Data;Scheda;Esercizio;Serie;Peso (kg);Reps;Tempo (s);Completata\n")
+
+        _workoutLogs.value.forEach { log ->
+            log.exercises.forEach { ex ->
+                ex.sets.forEachIndexed { index, set ->
+                    // Puliamo eventuali punti e virgola scritti nei nomi per non corrompere la tabella
+                    val safeScheda = log.templateName.replace(";", " ")
+                    val safeEx = ex.exerciseName.replace(";", " ")
+                    val compl = if (set.completed) "Si" else "No"
+                    val weightStr = if (set.weight % 1.0 == 0.0) {
+                        String.format(Locale.getDefault(), "%.0f", set.weight)
+                    } else {
+                        String.format(Locale.getDefault(), "%.1f", set.weight)
+                    }
+
+                    builder.append("${log.date};$safeScheda;$safeEx;${index + 1};$weightStr;${set.reps};${set.timeSeconds};$compl\n")
+                }
+            }
+        }
+        return builder.toString()
+    }
+
+    fun getTemplatesCsvContent(): String {
+        val builder = StringBuilder()
+        builder.append("Scheda;Esercizio;Serie Totali;Reps Target;Tempo Target (s);Recupero (s);Note\n")
+
+        _templates.value.forEach { t ->
+            t.exercises.forEach { ex ->
+                val safeScheda = t.name.replace(";", " ")
+                val safeEx = ex.exerciseName.replace(";", " ")
+                // Rimuoviamo gli "a capo" nelle note per non rompere le righe della tabella
+                val safeNote = ex.note.replace(";", " ").replace("\n", " ")
+
+                builder.append("$safeScheda;$safeEx;${ex.sets};${ex.reps};${ex.timeSeconds};${ex.restSeconds};$safeNote\n")
+            }
+        }
+        return builder.toString()
     }
 }
