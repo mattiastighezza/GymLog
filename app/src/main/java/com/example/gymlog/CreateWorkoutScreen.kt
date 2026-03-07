@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.PlayArrow // Cambiato Timer con PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -65,7 +66,6 @@ fun WheelTimePicker(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 43.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            // Ruota libera attiva, ma aggancio (snap) con la velocità di default!
             flingBehavior = PagerDefaults.flingBehavior(
                 state = pagerState,
                 pagerSnapDistance = PagerSnapDistance.atMost(100)
@@ -216,11 +216,19 @@ fun CreateWorkoutScreen(
                                     Spacer(Modifier.width(4.dp))
                                     Text("${exercise.sets} Serie", style = MaterialTheme.typography.bodyLarge)
                                 }
+
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Refresh, contentDescription = "Ripetizioni", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("${exercise.reps} Reps", style = MaterialTheme.typography.bodyLarge)
+                                    if (exercise.isTimeBased) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = "Tempo", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("${exercise.timeSeconds}s", style = MaterialTheme.typography.bodyLarge)
+                                    } else {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Ripetizioni", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("${exercise.reps} Reps", style = MaterialTheme.typography.bodyLarge)
+                                    }
                                 }
+
                                 val min = exercise.restSeconds / 60
                                 val sec = exercise.restSeconds % 60
                                 Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
@@ -362,8 +370,11 @@ fun CreateWorkoutScreen(
             val initialConfig = if (editingIndex != null) exercises[editingIndex!!] else null
 
             var note by remember { mutableStateOf(initialConfig?.note ?: "") }
+
+            var isTimeBased by remember { mutableStateOf(initialConfig?.isTimeBased ?: false) }
             var sets by remember { mutableStateOf(if (initialConfig?.sets != 0 && initialConfig != null) initialConfig.sets.toString() else "") }
             var reps by remember { mutableStateOf(if (initialConfig?.reps != 0 && initialConfig != null) initialConfig.reps.toString() else "") }
+            var timeSeconds by remember { mutableStateOf(if (initialConfig?.timeSeconds != 0 && initialConfig != null) initialConfig.timeSeconds.toString() else "") }
 
             val initialRestTarget = initialConfig?.restSeconds ?: 90
             val closestValidRest = restTimerOptions.minByOrNull { abs(it - initialRestTarget) } ?: 90
@@ -388,18 +399,29 @@ fun CreateWorkoutScreen(
                 text = {
                     Column {
                         OutlinedTextField(
-                            value = note,
-                            onValueChange = { note = it },
+                            value = note, onValueChange = { note = it },
                             label = { Text("Note (es. 'Lento', 'Cavi')") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
+                            modifier = Modifier.fillMaxWidth(), singleLine = true
                         )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Switch(checked = isTimeBased, onCheckedChange = { isTimeBased = it })
+                            Spacer(Modifier.width(8.dp))
+                            Text("Esercizio a tempo (es. Plank)", style = MaterialTheme.typography.bodyMedium)
+                        }
 
                         Spacer(Modifier.height(16.dp))
 
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(value = sets, onValueChange = { sets = it }, label = { Text("Serie") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                            OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Ripetizioni") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+
+                            if (isTimeBased) {
+                                OutlinedTextField(value = timeSeconds, onValueChange = { timeSeconds = it }, label = { Text("Durata (sec)") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            } else {
+                                OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Ripetizioni") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            }
                         }
 
                         Spacer(Modifier.height(24.dp))
@@ -415,7 +437,15 @@ fun CreateWorkoutScreen(
                 },
                 confirmButton = {
                     Button(onClick = {
-                        val newConfig = ExerciseConfig(selectedExerciseName, sets.toIntOrNull() ?: 0, reps.toIntOrNull() ?: 0, finalRestSeconds, note)
+                        val newConfig = ExerciseConfig(
+                            exerciseName = selectedExerciseName,
+                            sets = sets.toIntOrNull() ?: 0,
+                            reps = if (!isTimeBased) (reps.toIntOrNull() ?: 0) else 0,
+                            restSeconds = finalRestSeconds,
+                            note = note,
+                            isTimeBased = isTimeBased,
+                            timeSeconds = if (isTimeBased) (timeSeconds.toIntOrNull() ?: 0) else 0
+                        )
 
                         val newList = exercises.toMutableList()
                         if (editingIndex != null) newList[editingIndex!!] = newConfig else newList.add(newConfig)

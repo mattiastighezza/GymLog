@@ -12,18 +12,23 @@ data class ExerciseConfig(
     var sets: Int,
     var reps: Int,
     var restSeconds: Int,
-    var note: String = "" // NUOVO CAMPO: La nota per la scheda
+    var note: String = "",
+    // NUOVI CAMPI PER GLI ESERCIZI A TEMPO
+    var isTimeBased: Boolean = false,
+    var timeSeconds: Int = 0
 )
 
 data class LoggedSet(
     var weight: Double = 0.0,
     var reps: Int = 0,
+    var timeSeconds: Int = 0, // Nuovo campo per lo storico
     var completed: Boolean = false
 )
 
 data class LoggedExercise(
     val exerciseName: String,
-    var note: String = "", // NUOVO CAMPO: Salviamo la nota anche nello storico
+    var note: String = "",
+    var isTimeBased: Boolean = false, // Ricordiamo se era a tempo
     var sets: List<LoggedSet>
 )
 

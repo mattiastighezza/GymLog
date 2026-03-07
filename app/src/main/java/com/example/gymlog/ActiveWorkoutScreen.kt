@@ -1,5 +1,4 @@
 package com.example.gymlog
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,8 +31,16 @@ fun ActiveWorkoutScreen(
         mutableStateOf(template.exercises.map { config ->
             LoggedExercise(
                 exerciseName = config.exerciseName,
-                note = config.note, // Carichiamo la nota dalla scheda
-                sets = List(config.sets) { LoggedSet(weight = 0.0, reps = config.reps, completed = false) }
+                note = config.note,
+                isTimeBased = config.isTimeBased, // Recuperiamo la flag!
+                sets = List(config.sets) {
+                    LoggedSet(
+                        weight = 0.0,
+                        reps = config.reps,
+                        timeSeconds = config.timeSeconds, // Recuperiamo i secondi bersaglio
+                        completed = false
+                    )
+                }
             )
         })
     }
@@ -95,7 +102,6 @@ fun ActiveWorkoutScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
 
-                        // MOSTRIAMO LA NOTA DURANTE L'ALLENAMENTO
                         if (exercise.note.isNotBlank()) {
                             Text(
                                 text = "📝 ${exercise.note}",
@@ -108,10 +114,17 @@ fun ActiveWorkoutScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        // TABELLA INTESTATATA DINAMICAMENTE
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Set", modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                             Text("kg", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
-                            Text("Reps", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+
+                            if (exercise.isTimeBased) {
+                                Text("Tempo (s)", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                            } else {
+                                Text("Reps", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                            }
+
                             Text("Fatto", modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                         }
 
@@ -140,16 +153,30 @@ fun ActiveWorkoutScreen(
                                     textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
                                 )
 
-                                OutlinedTextField(
-                                    value = loggedSet.reps.toString(),
-                                    onValueChange = { newValue ->
-                                        val reps = newValue.toIntOrNull() ?: 0
-                                        updateSet(exIndex, setIndex, loggedSet.copy(reps = reps))
-                                    },
-                                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(50.dp),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
-                                )
+                                // INPUT CAMBIA A SECONDA DEL TIPO
+                                if (exercise.isTimeBased) {
+                                    OutlinedTextField(
+                                        value = loggedSet.timeSeconds.toString(),
+                                        onValueChange = { newValue ->
+                                            val sec = newValue.toIntOrNull() ?: 0
+                                            updateSet(exIndex, setIndex, loggedSet.copy(timeSeconds = sec))
+                                        },
+                                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(50.dp),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+                                    )
+                                } else {
+                                    OutlinedTextField(
+                                        value = loggedSet.reps.toString(),
+                                        onValueChange = { newValue ->
+                                            val reps = newValue.toIntOrNull() ?: 0
+                                            updateSet(exIndex, setIndex, loggedSet.copy(reps = reps))
+                                        },
+                                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(50.dp),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+                                    )
+                                }
 
                                 Box(modifier = Modifier.weight(0.5f), contentAlignment = Alignment.Center) {
                                     IconButton(

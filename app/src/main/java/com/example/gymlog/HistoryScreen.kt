@@ -108,7 +108,12 @@ fun WorkoutLogsTab(logs: List<WorkoutLog>, onDeleteClick: (WorkoutLog) -> Unit) 
                                     if (set.completed) {
                                         Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text("Serie ${i + 1}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text("${set.weight} kg  x  ${set.reps} reps", fontWeight = FontWeight.Medium)
+                                            // MOSTRIAMO IL TESTO CORRETTO NELLO STORICO ESPANSO
+                                            if (exercise.isTimeBased) {
+                                                Text("${set.weight} kg  x  ${set.timeSeconds} sec", fontWeight = FontWeight.Medium)
+                                            } else {
+                                                Text("${set.weight} kg  x  ${set.reps} reps", fontWeight = FontWeight.Medium)
+                                            }
                                         }
                                     }
                                 }
@@ -166,7 +171,10 @@ fun ExerciseChartTab(logs: List<WorkoutLog>) {
             val exercise = log.exercises.find { it.exerciseName == selectedExercise }
             if (exercise != null) {
                 val value = if (showVolume) {
-                    val vol = exercise.sets.filter { it.completed }.sumOf { it.weight * it.reps }.toFloat()
+                    // CALCOLO DEL VOLUME: se è a tempo moltiplica per i secondi (es. plank con sovraccarico), altrimenti per le reps
+                    val vol = exercise.sets.filter { it.completed }.sumOf {
+                        it.weight * if (exercise.isTimeBased) it.timeSeconds else it.reps
+                    }.toFloat()
                     if (vol > 0) vol else null
                 } else {
                     val maxW = exercise.sets.filter { it.completed }.maxOfOrNull { it.weight }?.toFloat()
@@ -206,29 +214,25 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
         val chartWidth = size.width - paddingLeft - paddingRight
         val chartHeight = size.height - paddingTop - paddingBottom
 
-        // Assi principali
         drawLine(Color.Gray.copy(alpha=0.5f), Offset(paddingLeft, paddingTop), Offset(paddingLeft, size.height - paddingBottom), strokeWidth = 2f)
         drawLine(Color.Gray.copy(alpha=0.5f), Offset(paddingLeft, size.height - paddingBottom), Offset(size.width - paddingRight, size.height - paddingBottom), strokeWidth = 2f)
 
-        // Calcolo Y: Arrotondiamo a decine pulite per la scala
         val rawMax = data.maxOf { it.second }
         val rawMin = data.minOf { it.second }
 
         val minRounded = (Math.floor((rawMin / 10).toDouble()) * 10).toFloat()
         var maxRounded = (Math.ceil((rawMax / 10).toDouble()) * 10).toFloat()
-        if (maxRounded == minRounded) maxRounded += 10f // Previene range 0
+        if (maxRounded == minRounded) maxRounded += 10f
 
         val rangeY = maxRounded - minRounded
-        val stepY = rangeY / 5f // ESATTAMENTE 5 STEP (es. da 10 a 20 -> 12, 14, 16, 18, 20)
+        val stepY = rangeY / 5f
 
         val dashedEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
 
-        // DISEGNO GRIGLIA ASSE Y (5 linee + la base)
         for (i in 0..5) {
             val currentYVal = minRounded + (stepY * i)
             val y = paddingTop + chartHeight - ((currentYVal - minRounded) / rangeY * chartHeight)
 
-            // Disegna la griglia orizzontale solo se non siamo sulla base (i = 0)
             if (i > 0) {
                 drawLine(
                     color = Color.Gray.copy(alpha = 0.3f),
@@ -239,7 +243,6 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
                 )
             }
 
-            // Etichetta (senza decimali se intero)
             val text = if (currentYVal % 1f == 0f) String.format("%.0f", currentYVal) else String.format("%.1f", currentYVal)
             val measuredText = textMeasurer.measure(text, labelStyle)
             drawText(textMeasurer, text, Offset(paddingLeft - measuredText.size.width - 16f, y - measuredText.size.height / 2), style = labelStyle)
@@ -248,27 +251,22 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
         val stepX = chartWidth / (data.size - 1)
         val path = Path()
 
-        // Calcolo X: Vogliamo mostrare ESATTAMENTE 5 etichette e linee tratteggiate verticali
         val xIndicesToShow = mutableSetOf<Int>()
-        xIndicesToShow.add(0) // Asse Y principale
+        xIndicesToShow.add(0)
         if (data.size <= 6) {
-            // Se abbiamo pochi dati, li mostriamo tutti
             xIndicesToShow.addAll(data.indices)
         } else {
-            // Se ne abbiamo tanti, dividiamo i punti equamente in 5 blocchi
             for (i in 1..5) {
                 xIndicesToShow.add(((data.size - 1) * i) / 5)
             }
         }
 
-        // DISEGNO PUNTI, LINEE VERTICALI E DATE
         data.forEachIndexed { index, pair ->
             val x = paddingLeft + (index * stepX)
             val y = paddingTop + chartHeight - ((pair.second - minRounded) / rangeY * chartHeight)
 
-            // Disegniamo la linea verticale e l'etichetta SOLO per gli indici scelti (max 5 + asse zero)
             if (xIndicesToShow.contains(index)) {
-                if (index > 0) { // Non disegniamo il tratteggio sopra l'asse Y
+                if (index > 0) {
                     drawLine(
                         color = Color.Gray.copy(alpha = 0.3f),
                         start = Offset(x, paddingTop),
@@ -285,11 +283,9 @@ fun ProgressChart(data: List<Pair<String, Float>>, modifier: Modifier = Modifier
 
             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
 
-            // Pallino sempre disegnato per ogni allenamento
             drawCircle(color, radius = 8f, center = Offset(x, y))
         }
 
-        // Curva principale del grafico
         drawPath(path, color, style = Stroke(width = 6f))
     }
 }
